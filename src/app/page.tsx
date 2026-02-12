@@ -12,6 +12,7 @@ import {
 } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdf';
 import AppShell from '@/components/AppShell';
+import POList from '@/components/POList';
 import POInput from '@/components/POInput';
 import WindowForm from '@/components/WindowForm';
 import WindowList from '@/components/WindowList';
@@ -181,6 +182,11 @@ export default function Home() {
           {statusMessage.text}
         </div>
       )}
+
+      <POList
+        onSelectPO={handleLoadPO}
+        currentPO={currentPO}
+      />
 
       <POInput
         onLoadPO={handleLoadPO}

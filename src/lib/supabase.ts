@@ -33,6 +33,41 @@ export interface WindowRow {
 
 export type WindowInsert = Omit<WindowRow, 'id' | 'created_at' | 'updated_at'>;
 
+export interface POSummary {
+  po_number: string;
+  total: number;
+  measured: number;
+  created_at: string;
+}
+
+export async function fetchAvailablePOs(): Promise<POSummary[]> {
+  const { data, error } = await supabase
+    .from('windows')
+    .select('po_number, status, created_at')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  // Group by PO number
+  const poMap = new Map<string, POSummary>();
+  for (const row of data) {
+    const existing = poMap.get(row.po_number);
+    if (existing) {
+      existing.total++;
+      if (row.status === 'measured') existing.measured++;
+    } else {
+      poMap.set(row.po_number, {
+        po_number: row.po_number,
+        total: 1,
+        measured: row.status === 'measured' ? 1 : 0,
+        created_at: row.created_at,
+      });
+    }
+  }
+
+  return Array.from(poMap.values());
+}
+
 export async function fetchWindows(poNumber: string): Promise<WindowRow[]> {
   const { data, error } = await supabase
     .from('windows')
