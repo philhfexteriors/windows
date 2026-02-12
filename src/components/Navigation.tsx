@@ -11,7 +11,8 @@ interface NavItem {
 }
 
 const mainNav: NavItem[] = [
-  { href: '/', label: 'Measure', icon: '📏' },
+  { href: '/', label: 'Dashboard', icon: '🏠' },
+  { href: '/measurements', label: 'Measure', icon: '📏' },
   { href: '/upload', label: 'Upload Spreadsheet', icon: '📤' },
 ]
 

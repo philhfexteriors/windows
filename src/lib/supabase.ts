@@ -159,6 +159,48 @@ export async function removeWindow(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export interface DashboardStats {
+  totalJobs: number;
+  pendingWindows: number;
+  measuredWindows: number;
+}
+
+export async function fetchDashboardStats(): Promise<DashboardStats> {
+  const { data, error } = await supabase
+    .from('windows')
+    .select('po_number, status');
+
+  if (error) throw error;
+
+  const poNumbers = new Set<string>();
+  let pending = 0;
+  let measured = 0;
+
+  for (const row of data) {
+    poNumbers.add(row.po_number);
+    if (row.status === 'measured') measured++;
+    else pending++;
+  }
+
+  return {
+    totalJobs: poNumbers.size,
+    pendingWindows: pending,
+    measuredWindows: measured,
+  };
+}
+
+export async function fetchRecentMeasurements(limit = 10): Promise<WindowRow[]> {
+  const { data, error } = await supabase
+    .from('windows')
+    .select('*')
+    .eq('status', 'measured')
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data as WindowRow[];
+}
+
 export async function bulkInsertWindows(
   poNumber: string,
   rows: Partial<Omit<WindowRow, 'id' | 'po_number' | 'created_at' | 'updated_at'>>[]
