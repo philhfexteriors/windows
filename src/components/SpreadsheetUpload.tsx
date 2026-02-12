@@ -69,7 +69,7 @@ export default function SpreadsheetUpload() {
           type="file"
           accept=".xlsx,.xls,.csv"
           onChange={handleFileChange}
-          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#9D2235] file:text-white hover:file:bg-red-800 file:cursor-pointer"
+          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark file:cursor-pointer"
         />
         {parsing && (
           <p className="mt-2 text-sm text-blue-600">Parsing file...</p>
@@ -179,7 +179,7 @@ export default function SpreadsheetUpload() {
           <button
             onClick={handleUpload}
             disabled={uploading || !poNumber.trim()}
-            className="w-full mt-6 bg-[#9D2235] text-white font-bold py-3 px-6 rounded-lg hover:bg-red-800 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-6 bg-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-primary-dark transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading
               ? 'Saving...'

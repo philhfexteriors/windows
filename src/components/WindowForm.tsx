@@ -375,7 +375,7 @@ export default function WindowForm({
                       setOtherTransomShape('');
                     }
                   }}
-                  className="h-4 w-4 rounded border-gray-300 text-[#9D2235]"
+                  className="h-4 w-4 rounded border-gray-300 text-primary"
                 />
                 <label
                   htmlFor="transomCheckbox"

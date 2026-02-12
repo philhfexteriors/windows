@@ -39,12 +39,12 @@ export default function POInput({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="flex-grow w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-[#9D2235]"
+          className="flex-grow w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-primary"
         />
         <button
           onClick={handleLoad}
           disabled={loading}
-          className="w-full sm:w-auto bg-[#9D2235] text-white font-bold py-2 px-6 rounded-lg hover:bg-red-800 transition-colors duration-300 flex items-center justify-center disabled:opacity-50"
+          className="w-full sm:w-auto bg-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-primary-dark transition-colors duration-300 flex items-center justify-center disabled:opacity-50"
         >
           {loading && (
             <svg

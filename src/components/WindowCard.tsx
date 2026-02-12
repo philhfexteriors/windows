@@ -71,12 +71,12 @@ export default function WindowCard({
 
   // Measured state
   return (
-    <div className="bg-gray-50 border-l-4 border-[#9D2235] p-4 rounded-r-md shadow-sm">
+    <div className="bg-gray-50 border-l-4 border-primary p-4 rounded-r-md shadow-sm">
       <div className="flex justify-between items-start">
         <div>
           <div className="flex items-center gap-2">
             {w.label && (
-              <span className="text-sm font-bold text-[#9D2235] bg-red-100 px-2 py-0.5 rounded">
+              <span className="text-sm font-bold text-primary bg-red-100 px-2 py-0.5 rounded">
                 #{w.label}
               </span>
             )}
@@ -92,7 +92,7 @@ export default function WindowCard({
             </p>
           )}
         </div>
-        <p className="font-bold text-xl text-[#9D2235]">
+        <p className="font-bold text-xl text-primary">
           {formatFraction(w.final_w)}&quot; × {formatFraction(w.final_h)}&quot;
         </p>
       </div>

@@ -37,7 +37,7 @@ export default function WindowList({
       {totalCount > 0 && (
         <div className="mb-4 bg-gray-200 rounded-full h-2">
           <div
-            className="bg-[#9D2235] h-2 rounded-full transition-all duration-500"
+            className="bg-primary h-2 rounded-full transition-all duration-500"
             style={{
               width: `${totalCount > 0 ? (measuredCount / totalCount) * 100 : 0}%`,
             }}

@@ -11,6 +11,7 @@ import {
   type WindowRow,
 } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdf';
+import AppShell from '@/components/AppShell';
 import POInput from '@/components/POInput';
 import WindowForm from '@/components/WindowForm';
 import WindowList from '@/components/WindowList';
@@ -168,13 +169,8 @@ export default function Home() {
   const measuredCount = windows.filter((w) => w.status === 'measured').length;
 
   return (
-    <div className="container mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
-      <header className="text-center mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold text-[#9D2235]">
-          H&F Exteriors
-        </h1>
-        <p className="text-lg text-gray-600">Window Measurement App</p>
-      </header>
+    <AppShell>
+      <h1 className="text-3xl font-bold mb-6 text-primary">Window Measurements</h1>
 
       {statusMessage && (
         <div
@@ -208,6 +204,6 @@ export default function Home() {
         onDelete={handleDelete}
         onExportPDF={handleExportPDF}
       />
-    </div>
+    </AppShell>
   );
 }
