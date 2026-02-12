@@ -166,8 +166,8 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
   // 3. Parse window data starting from the row after the header
   const windows: ParsedSpreadsheet['windows'] = [];
   const dataStartRow = headerRowIdx + 1;
-  const hasQuantityCol = columnMap.quantity !== undefined;
-  const hasLabelCol = columnMap.label !== undefined;
+  const hasQuantityCol = columnMap['quantity'] !== undefined;
+  const hasLabelCol = columnMap['label'] !== undefined;
   let windowCounter = 1;
 
   for (let r = dataStartRow; r < rows.length; r++) {
@@ -217,46 +217,42 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
     const style = styleRaw || null;
     const windowType = styleRaw === 'Half Round' ? 'Half-Round' : '';
 
-    // Determine how many windows to create from this row
-    let qty = 1;
+    // Quantity is informational (for ordering), not for creating multiple entries
+    // Each spreadsheet row = one window to measure
+    const label = hasLabelCol && labelRaw ? labelRaw : String(windowCounter++);
+
+    // Include quantity in notes if present and > 1
+    let finalNotes = notesRaw || '';
     if (hasQuantityCol && quantityRaw) {
-      const parsed = parseInt(quantityRaw, 10);
-      if (!isNaN(parsed) && parsed > 0) qty = parsed;
-    }
-
-    // Create window entries (expand by quantity)
-    for (let q = 0; q < qty; q++) {
-      // Generate label: use explicit label col if available, otherwise auto-number
-      let label: string | null;
-      if (hasLabelCol && labelRaw) {
-        label = qty > 1 ? `${labelRaw}-${q + 1}` : labelRaw;
-      } else {
-        label = String(windowCounter);
-        windowCounter++;
+      const qty = parseInt(quantityRaw, 10);
+      if (!isNaN(qty) && qty > 1) {
+        finalNotes = finalNotes
+          ? `Qty: ${qty}. ${finalNotes}`
+          : `Qty: ${qty}`;
       }
-
-      windows.push({
-        label,
-        location: `Window ${label}`,
-        type: windowType,
-        approx_width: width || null,
-        approx_height: height || null,
-        widths: [],
-        heights: [],
-        final_w: null,
-        final_h: null,
-        transom_shape: transomShape,
-        transom_height: transomHeight,
-        style: style,
-        grid_style: noneToNull(gridStyleRaw),
-        temper: noneToNull(temperRaw),
-        outside_color: outsideColorRaw || null,
-        inside_color: insideColorRaw || null,
-        screen: noneToNull(screenRaw),
-        notes: notesRaw || '',
-        status: 'pending' as const,
-      });
     }
+
+    windows.push({
+      label,
+      location: `Window ${label}`,
+      type: windowType,
+      approx_width: width || null,
+      approx_height: height || null,
+      widths: [],
+      heights: [],
+      final_w: null,
+      final_h: null,
+      transom_shape: transomShape,
+      transom_height: transomHeight,
+      style: style,
+      grid_style: noneToNull(gridStyleRaw),
+      temper: noneToNull(temperRaw),
+      outside_color: outsideColorRaw || null,
+      inside_color: insideColorRaw || null,
+      screen: noneToNull(screenRaw),
+      notes: finalNotes,
+      status: 'pending' as const,
+    });
   }
 
   return { poNumber, clientName, address, windows };
