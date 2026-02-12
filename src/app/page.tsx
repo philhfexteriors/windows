@@ -1,65 +1,213 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useRef, useCallback, useEffect } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import {
+  fetchWindows,
+  subscribeToWindows,
+  addWindow,
+  updateWindow,
+  removeWindow,
+  type WindowRow,
+} from '@/lib/supabase';
+import { generatePDF } from '@/lib/pdf';
+import POInput from '@/components/POInput';
+import WindowForm from '@/components/WindowForm';
+import WindowList from '@/components/WindowList';
+
+interface StatusMessage {
+  text: string;
+  isError: boolean;
+}
 
 export default function Home() {
+  const [currentPO, setCurrentPO] = useState<string | null>(null);
+  const [windows, setWindows] = useState<WindowRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editingWindow, setEditingWindow] = useState<WindowRow | null>(null);
+  const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const statusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showStatus = useCallback((text: string, isError = true) => {
+    setStatusMessage({ text, isError });
+    if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
+    statusTimeoutRef.current = setTimeout(() => setStatusMessage(null), 4000);
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (channelRef.current) channelRef.current.unsubscribe();
+      if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
+    };
+  }, []);
+
+  const refreshWindows = useCallback(
+    async (po: string) => {
+      try {
+        const data = await fetchWindows(po);
+        setWindows(data);
+      } catch (err) {
+        console.error('Failed to fetch windows:', err);
+      }
+    },
+    []
+  );
+
+  const handleLoadPO = useCallback(
+    async (poNumber: string) => {
+      // Cleanup previous subscription
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        channelRef.current = null;
+      }
+
+      setLoading(true);
+      setCurrentPO(poNumber);
+      setEditingWindow(null);
+
+      try {
+        const data = await fetchWindows(poNumber);
+        setWindows(data);
+        showStatus(`Loaded PO: ${poNumber}. Found ${data.length} window(s).`, false);
+
+        // Subscribe to realtime updates
+        channelRef.current = subscribeToWindows(poNumber, () => {
+          refreshWindows(poNumber);
+        });
+      } catch (err) {
+        console.error('Error loading PO:', err);
+        showStatus('Error loading data. Check connection and try again.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [showStatus, refreshWindows]
+  );
+
+  const handleSave = useCallback(
+    async (
+      data: Partial<
+        Omit<WindowRow, 'id' | 'po_number' | 'created_at' | 'updated_at'>
+      >
+    ) => {
+      if (!currentPO) return;
+
+      try {
+        if (editingWindow) {
+          await updateWindow(editingWindow.id, data);
+          showStatus('Window updated successfully!', false);
+          setEditingWindow(null);
+        } else {
+          await addWindow(currentPO, data);
+          showStatus('Window saved successfully!', false);
+        }
+        await refreshWindows(currentPO);
+      } catch (err) {
+        console.error('Error saving window:', err);
+        showStatus('Failed to save window. Check connection.');
+        throw err;
+      }
+    },
+    [currentPO, editingWindow, showStatus, refreshWindows]
+  );
+
+  const handleMeasure = useCallback(
+    (id: string) => {
+      const w = windows.find((w) => w.id === id);
+      if (w) setEditingWindow(w);
+    },
+    [windows]
+  );
+
+  const handleEdit = useCallback(
+    (id: string) => {
+      const w = windows.find((w) => w.id === id);
+      if (w) setEditingWindow(w);
+    },
+    [windows]
+  );
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (!currentPO) return;
+      if (!window.confirm('Are you sure you want to delete this window?')) return;
+
+      try {
+        await removeWindow(id);
+        showStatus('Window deleted successfully!', false);
+        await refreshWindows(currentPO);
+      } catch (err) {
+        console.error('Error deleting window:', err);
+        showStatus('Failed to delete window. Check connection.');
+      }
+    },
+    [currentPO, showStatus, refreshWindows]
+  );
+
+  const handleExportPDF = useCallback(async () => {
+    if (!currentPO) return;
+    const measuredWindows = windows.filter((w) => w.status === 'measured');
+    if (measuredWindows.length === 0) {
+      showStatus('No measured windows to export.');
+      return;
+    }
+    try {
+      await generatePDF(measuredWindows, currentPO);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      showStatus('Failed to generate PDF.');
+    }
+  }, [currentPO, windows, showStatus]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingWindow(null);
+  }, []);
+
+  const measuredCount = windows.filter((w) => w.status === 'measured').length;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="container mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
+      <header className="text-center mb-8">
+        <h1 className="text-3xl sm:text-4xl font-bold text-[#9D2235]">
+          H&F Exteriors
+        </h1>
+        <p className="text-lg text-gray-600">Window Measurement App</p>
+      </header>
+
+      {statusMessage && (
+        <div
+          className={`p-4 mb-6 text-center text-white rounded-lg transition-all duration-300 ${
+            statusMessage.isError ? 'bg-red-600' : 'bg-green-600'
+          }`}
+        >
+          {statusMessage.text}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      )}
+
+      <POInput
+        onLoadPO={handleLoadPO}
+        loading={loading}
+        currentPO={currentPO}
+        windowCount={windows.length}
+        measuredCount={measuredCount}
+      />
+
+      <WindowForm
+        enabled={currentPO !== null}
+        editingWindow={editingWindow}
+        onSave={handleSave}
+        onCancelEdit={handleCancelEdit}
+      />
+
+      <WindowList
+        windows={windows}
+        onMeasure={handleMeasure}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onExportPDF={handleExportPDF}
+      />
     </div>
   );
 }
