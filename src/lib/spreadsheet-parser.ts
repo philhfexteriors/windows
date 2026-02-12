@@ -28,7 +28,11 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
   const XLSX = await import('xlsx');
   const data = await file.arrayBuffer();
   const workbook = XLSX.read(data, { type: 'array' });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  // Prefer a sheet named "Windows" (case-insensitive), fall back to first sheet
+  const windowsSheetName = workbook.SheetNames.find(
+    (name: string) => name.toLowerCase() === 'windows'
+  );
+  const sheet = workbook.Sheets[windowsSheetName || workbook.SheetNames[0]];
 
   // Convert sheet to array of arrays for easier processing
   const rows: (string | number | null)[][] = XLSX.utils.sheet_to_json(sheet, {
