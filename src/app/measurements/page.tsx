@@ -212,26 +212,62 @@ function MeasurementsContent() {
         </div>
       )}
 
-      <POList
-        onSelectPO={handleLoadPO}
-        currentPO={currentPO}
-      />
+      {/* Show job list + manual PO input only when no PO is loaded */}
+      {!currentPO && (
+        <>
+          <POList
+            onSelectPO={handleLoadPO}
+            currentPO={currentPO}
+          />
 
-      <POInput
-        onLoadPO={handleLoadPO}
-        loading={loading}
-        currentPO={currentPO}
-        windowCount={windows.length}
-        measuredCount={measuredCount}
-      />
+          <POInput
+            onLoadPO={handleLoadPO}
+            loading={loading}
+            currentPO={currentPO}
+            windowCount={windows.length}
+            measuredCount={measuredCount}
+          />
+        </>
+      )}
 
-      <WindowForm
-        enabled={currentPO !== null}
-        editingWindow={editingWindow}
-        onSave={handleSave}
-        onCancelEdit={handleCancelEdit}
-      />
+      {/* When a PO is loaded, show the PO header with change button */}
+      {currentPO && (
+        <div className="bg-white p-4 rounded-xl shadow-md mb-6 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-500">Current Job</p>
+            <p className="text-lg font-bold text-primary">{currentPO}</p>
+            <p className="text-sm text-gray-500">
+              {windows.length} window(s), {measuredCount} measured
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setCurrentPO(null);
+              setWindows([]);
+              setEditingWindow(null);
+              if (channelRef.current) {
+                channelRef.current.unsubscribe();
+                channelRef.current = null;
+              }
+            }}
+            className="text-sm text-secondary hover:text-primary font-medium transition-colors"
+          >
+            Change Job
+          </button>
+        </div>
+      )}
 
+      {/* Measurement form — shown when editing/measuring a window */}
+      {editingWindow && (
+        <WindowForm
+          enabled={currentPO !== null}
+          editingWindow={editingWindow}
+          onSave={handleSave}
+          onCancelEdit={handleCancelEdit}
+        />
+      )}
+
+      {/* Saved windows list */}
       <WindowList
         windows={windows}
         onMeasure={handleMeasure}
@@ -239,6 +275,18 @@ function MeasurementsContent() {
         onDelete={handleDelete}
         onExportPDF={handleExportPDF}
       />
+
+      {/* Add a Window — below the list, only when not editing */}
+      {currentPO && !editingWindow && (
+        <div className="mt-6">
+          <WindowForm
+            enabled={true}
+            editingWindow={null}
+            onSave={handleSave}
+            onCancelEdit={handleCancelEdit}
+          />
+        </div>
+      )}
     </>
   );
 }

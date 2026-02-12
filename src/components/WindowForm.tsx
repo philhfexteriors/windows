@@ -290,7 +290,7 @@ export default function WindowForm({
       }`}
     >
       <h2 className="text-xl font-semibold mb-4 text-gray-700">
-        2. {isEditing ? (isPendingWindow ? 'Measure Window' : 'Edit Window') : 'Add a Window'}
+        {isEditing ? (isPendingWindow ? 'Measure Window' : 'Edit Window') : 'Add a Window'}
       </h2>
 
       {/* Reference values for pending windows */}

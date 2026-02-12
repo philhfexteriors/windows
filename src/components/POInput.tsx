@@ -31,7 +31,7 @@ export default function POInput({
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-md mb-8">
-      <h2 className="text-xl font-semibold mb-4 text-gray-700">1. Input PO</h2>
+      <h2 className="text-xl font-semibold mb-4 text-gray-700">Input PO</h2>
       <div className="flex flex-col sm:flex-row gap-4">
         <input
           type="text"

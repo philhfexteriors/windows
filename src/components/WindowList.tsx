@@ -26,7 +26,7 @@ export default function WindowList({
   return (
     <div className="bg-white p-6 rounded-xl shadow-md">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-gray-700">3. Saved Windows</h2>
+        <h2 className="text-xl font-semibold text-gray-700">Saved Windows</h2>
         {totalCount > 0 && (
           <span className="text-sm font-medium text-gray-500">
             {measuredCount} of {totalCount} measured
