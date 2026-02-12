@@ -9,11 +9,12 @@ export interface ParsedSpreadsheet {
 
 // Column header aliases — maps our internal field to possible header text
 const HEADER_MAP: Record<string, string[]> = {
-  label: ['label', 'window', 'win', '#', 'no', 'number'],
+  quantity: ['quantity', 'quanity', 'qty', 'count', 'qty.', 'qty #'],
+  label: ['label', 'window #', 'win #', 'window no', 'window number'],
   width: ['width', 'width inches', 'w', 'width (inches)'],
   height: ['height', 'height inches', 'h', 'height (inches)'],
   transomHeight: ['transom height', 'transom height inches', 'transom h'],
-  transomShape: ['transom shape', 'transom'],
+  transomShape: ['transom shape'],
   style: ['style'],
   gridStyle: ['grid style', 'grid', 'grids'],
   temper: ['temper', 'tempered', 'glass'],
@@ -36,7 +37,7 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
     blankrows: true,
   });
 
-  // 1. Find the header row by looking for a row that contains "Label" and "Width"
+  // 1. Find the header row — look for a row containing "Width" or "Height"
   let headerRowIdx = -1;
   let columnMap: Record<string, number> = {};
 
@@ -48,16 +49,16 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
       c != null ? String(c).toLowerCase().trim() : ''
     );
 
-    // Check if this row has "label" somewhere
-    const hasLabel = cellValues.some((v) =>
-      HEADER_MAP.label.some((alias) => v === alias)
-    );
     // Check if this row has something width-related
     const hasWidth = cellValues.some((v) =>
       HEADER_MAP.width.some((alias) => v === alias || v.includes('width'))
     );
+    // Check if this row has something height-related
+    const hasHeight = cellValues.some((v) =>
+      HEADER_MAP.height.some((alias) => v === alias || v.includes('height'))
+    );
 
-    if (hasLabel && hasWidth) {
+    if (hasWidth && hasHeight) {
       headerRowIdx = r;
 
       // Map columns by matching header text to our field names
@@ -77,33 +78,26 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
     }
   }
 
-  // If we didn't find a header row, try a fallback: assume columns are in standard order
+  // If we still didn't find a header row, fallback
   if (headerRowIdx === -1) {
-    // Look for first row with a numeric value in column A that could be a label
     for (let r = 0; r < rows.length; r++) {
       const row = rows[r];
       if (!row) continue;
       const firstCell = row[0];
       if (firstCell != null && !isNaN(Number(firstCell)) && Number(firstCell) > 0) {
-        headerRowIdx = r - 1; // Assume header is one row above
+        headerRowIdx = r - 1;
         break;
       }
     }
 
-    // Default column order matching the spreadsheet screenshot
+    // Default column order
     columnMap = {
-      label: 0,
+      quantity: 0,
       width: 1,
       height: 2,
-      transomHeight: 3,
-      transomShape: 4,
-      style: 5,
-      gridStyle: 6,
-      temper: 7,
-      outsideColor: 8,
-      insideColor: 9,
-      screen: 10,
-      notes: 11,
+      style: 3,
+      gridStyle: 4,
+      notes: 5,
     };
   }
 
@@ -112,7 +106,7 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
   let address: string | null = null;
   let poNumber: string | null = null;
 
-  for (let r = 0; r < headerRowIdx; r++) {
+  for (let r = 0; r < Math.max(headerRowIdx, 0); r++) {
     const row = rows[r];
     if (!row) continue;
 
@@ -127,7 +121,11 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
         poNumber = String(row[c + 1]).trim();
       }
       // Look for "Client" or "Customer" labels
-      if ((lower.includes('client') || lower.includes('customer')) && c + 1 < row.length && row[c + 1] != null) {
+      if (
+        (lower.includes('client') || lower.includes('customer')) &&
+        c + 1 < row.length &&
+        row[c + 1] != null
+      ) {
         clientName = String(row[c + 1]).trim();
       }
       // Look for "Address" labels
@@ -136,15 +134,23 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
       }
     }
 
-    // Also check if the first cell of early rows is a name-like value (fallback for client)
+    // Check for address in a later column of the same row as client name
+    if (!address && row.length > 2 && row[2] != null) {
+      const val = String(row[2]).trim();
+      // If it looks like an address (has numbers and letters, long enough)
+      if (val.length > 10 && /\d/.test(val) && /[a-zA-Z]/.test(val)) {
+        address = val;
+      }
+    }
+
+    // Fallback: check if the first cell looks like a name
     if (!clientName && row[0] != null) {
       const first = String(row[0]).trim();
-      // If it looks like a name (has letters, not a header keyword)
       if (
         first.length > 2 &&
         /[a-zA-Z]/.test(first) &&
-        !['windows', 'label', 'width', 'height'].some((k) =>
-          first.toLowerCase().includes(k)
+        !['windows', 'label', 'width', 'height', 'vinyl', 'brand', 'manufacturer'].some(
+          (k) => first.toLowerCase().includes(k)
         )
       ) {
         clientName = first;
@@ -160,6 +166,9 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
   // 3. Parse window data starting from the row after the header
   const windows: ParsedSpreadsheet['windows'] = [];
   const dataStartRow = headerRowIdx + 1;
+  const hasQuantityCol = columnMap.quantity !== undefined;
+  const hasLabelCol = columnMap.label !== undefined;
+  let windowCounter = 1;
 
   for (let r = dataStartRow; r < rows.length; r++) {
     const row = rows[r];
@@ -173,12 +182,13 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
       return String(val).trim();
     };
 
-    const label = getCol('label');
     const width = getCol('width');
     const height = getCol('height');
+    const labelRaw = getCol('label');
+    const quantityRaw = getCol('quantity');
 
-    // Skip rows with no label, no width, and no height (empty rows)
-    if (!label && !width && !height) continue;
+    // Skip rows with no width and no height
+    if (!width && !height) continue;
 
     const transomHeightRaw = getCol('transomHeight');
     const transomShapeRaw = getCol('transomShape');
@@ -203,31 +213,50 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSpreadsheet> {
         ? null
         : transomShapeRaw;
 
-    // Normalize style — map "Half Round" to "Half-Round" for app type matching
+    // Normalize style
     const style = styleRaw || null;
     const windowType = styleRaw === 'Half Round' ? 'Half-Round' : '';
 
-    windows.push({
-      label: label || null,
-      location: label ? `Window ${label}` : '',
-      type: windowType,
-      approx_width: width || null,
-      approx_height: height || null,
-      widths: [],
-      heights: [],
-      final_w: null,
-      final_h: null,
-      transom_shape: transomShape,
-      transom_height: transomHeight,
-      style: style,
-      grid_style: noneToNull(gridStyleRaw),
-      temper: noneToNull(temperRaw),
-      outside_color: outsideColorRaw || null,
-      inside_color: insideColorRaw || null,
-      screen: noneToNull(screenRaw),
-      notes: notesRaw || '',
-      status: 'pending' as const,
-    });
+    // Determine how many windows to create from this row
+    let qty = 1;
+    if (hasQuantityCol && quantityRaw) {
+      const parsed = parseInt(quantityRaw, 10);
+      if (!isNaN(parsed) && parsed > 0) qty = parsed;
+    }
+
+    // Create window entries (expand by quantity)
+    for (let q = 0; q < qty; q++) {
+      // Generate label: use explicit label col if available, otherwise auto-number
+      let label: string | null;
+      if (hasLabelCol && labelRaw) {
+        label = qty > 1 ? `${labelRaw}-${q + 1}` : labelRaw;
+      } else {
+        label = String(windowCounter);
+        windowCounter++;
+      }
+
+      windows.push({
+        label,
+        location: `Window ${label}`,
+        type: windowType,
+        approx_width: width || null,
+        approx_height: height || null,
+        widths: [],
+        heights: [],
+        final_w: null,
+        final_h: null,
+        transom_shape: transomShape,
+        transom_height: transomHeight,
+        style: style,
+        grid_style: noneToNull(gridStyleRaw),
+        temper: noneToNull(temperRaw),
+        outside_color: outsideColorRaw || null,
+        inside_color: insideColorRaw || null,
+        screen: noneToNull(screenRaw),
+        notes: notesRaw || '',
+        status: 'pending' as const,
+      });
+    }
   }
 
   return { poNumber, clientName, address, windows };
