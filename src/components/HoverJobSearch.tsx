@@ -1,29 +1,35 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { HoverJob } from '@/lib/hover-types';
 import HoverConnectButton from '@/components/HoverConnectButton';
 
 interface Props {
   onSelect: (job: HoverJob) => void;
+  initialSearch?: string; // Pre-fill search with address from CC
 }
 
-export default function HoverJobSearch({ onSelect }: Props) {
+export default function HoverJobSearch({ onSelect, initialSearch }: Props) {
   const [jobs, setJobs] = useState<HoverJob[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch || '');
   const [hoverConnected, setHoverConnected] = useState<boolean | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const initialSearchDone = useRef(false);
 
-  const loadJobs = useCallback(async (pageNum: number, append = false) => {
+  const loadJobs = useCallback(async (searchTerm: string, pageNum: number, append = false) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/hover/jobs?page=${pageNum}`);
+      const params = new URLSearchParams({ page: String(pageNum), per: '100' });
+      if (searchTerm.length >= 3) {
+        params.set('search', searchTerm);
+      }
+      const res = await fetch(`/api/hover/jobs?${params}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Failed to fetch Hover jobs');
@@ -40,30 +46,37 @@ export default function HoverJobSearch({ onSelect }: Props) {
     }
   }, []);
 
+  // Auto-search when connected and initialSearch is provided
+  useEffect(() => {
+    if (hoverConnected && initialSearch && !initialSearchDone.current) {
+      initialSearchDone.current = true;
+      setPage(1);
+      loadJobs(initialSearch, 1);
+    }
+  }, [hoverConnected, initialSearch, loadJobs]);
+
   const handleLoad = () => {
     setPage(1);
-    loadJobs(1);
+    loadJobs(search, 1);
   };
 
   const handleLoadMore = () => {
     const next = page + 1;
     setPage(next);
-    loadJobs(next, true);
+    loadJobs(search, next, true);
   };
 
-  // Filter locally by search term (address)
-  const handleSearch = (value: string) => {
+  const handleSearchChange = (value: string) => {
     setSearch(value);
+    // Debounce server-side search (min 3 chars required by Hover API)
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (loaded) {
+      debounceRef.current = setTimeout(() => {
+        setPage(1);
+        loadJobs(value, 1);
+      }, 400);
+    }
   };
-
-  const filteredJobs = search
-    ? jobs.filter((j) => {
-        const addr = `${j.address.location_line_1} ${j.address.city} ${j.address.region} ${j.address.postal_code}`.toLowerCase();
-        const name = (j.name || '').toLowerCase();
-        const term = search.toLowerCase();
-        return addr.includes(term) || name.includes(term);
-      })
-    : jobs;
 
   return (
     <div>
@@ -77,12 +90,17 @@ export default function HoverJobSearch({ onSelect }: Props) {
           <div className="flex items-center justify-between mb-3">
             <HoverConnectButton onStatusChange={setHoverConnected} />
           </div>
+          {initialSearch && hoverConnected && (
+            <p className="text-xs text-gray-500 mb-2">
+              Searching Hover for: <span className="font-medium">{initialSearch}</span>
+            </p>
+          )}
           <button
             onClick={handleLoad}
             disabled={loading || hoverConnected !== true}
             className="w-full px-4 py-3 bg-blue-50 text-blue-700 rounded-xl font-medium text-sm hover:bg-blue-100 transition-colors disabled:opacity-50"
           >
-            {loading ? 'Loading Hover jobs...' : 'Load Jobs from Hover'}
+            {loading ? 'Searching Hover...' : 'Search Hover Jobs'}
           </button>
         </div>
       ) : (
@@ -91,19 +109,25 @@ export default function HoverJobSearch({ onSelect }: Props) {
             <input
               type="text"
               value={search}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Filter by address or job name..."
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Search by address, job name, or user..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
+            <p className="text-xs text-gray-400 mt-1">
+              {loading ? 'Searching...' : `${jobs.length} result${jobs.length !== 1 ? 's' : ''}`}
+              {search.length > 0 && search.length < 3 && ' (type at least 3 characters to search)'}
+            </p>
           </div>
 
           {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
           <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-72 overflow-y-auto">
-            {filteredJobs.length === 0 ? (
-              <p className="p-4 text-sm text-gray-500 text-center">No Hover jobs found.</p>
+            {jobs.length === 0 ? (
+              <p className="p-4 text-sm text-gray-500 text-center">
+                {search.length >= 3 ? 'No matching Hover jobs found.' : 'No Hover jobs found.'}
+              </p>
             ) : (
-              filteredJobs.map((job) => {
+              jobs.map((job) => {
                 const completeModels = job.models.filter((m) => m.state === 'complete');
                 return (
                   <button

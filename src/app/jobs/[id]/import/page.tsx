@@ -217,7 +217,10 @@ export default function ImportPage() {
                   Back
                 </button>
               </div>
-              <HoverJobSearch onSelect={handleHoverJobSelect} />
+              <HoverJobSearch
+                onSelect={handleHoverJobSelect}
+                initialSearch={job.client_address || undefined}
+              />
             </div>
           )}
 

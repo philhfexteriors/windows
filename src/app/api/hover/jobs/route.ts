@@ -12,10 +12,16 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const page = searchParams.get('page') || '1';
+  const search = searchParams.get('search') || '';
+  const per = searchParams.get('per') || '100';
 
   try {
     const url = new URL(`${HOVER_API_BASE}/jobs`);
     url.searchParams.set('page', page);
+    url.searchParams.set('per', per);
+    if (search.length >= 3) {
+      url.searchParams.set('search', search);
+    }
 
     const res = await fetch(url.toString(), {
       headers: {
