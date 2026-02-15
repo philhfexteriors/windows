@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useAuthContext } from '@/components/AuthProvider'
+import { signOut } from '@/lib/auth'
 
 interface NavItem {
   href: string
@@ -12,6 +14,7 @@ interface NavItem {
 
 const mainNav: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: '🏠' },
+  { href: '/jobs', label: 'Jobs', icon: '📋' },
   { href: '/measurements', label: 'Measure', icon: '📏' },
   { href: '/upload', label: 'Upload Spreadsheet', icon: '📤' },
 ]
@@ -19,6 +22,11 @@ const mainNav: NavItem[] = [
 export default function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { user, profile } = useAuthContext()
+
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'
+  const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url
+  const email = user?.email || ''
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
@@ -62,11 +70,30 @@ export default function Navigation() {
         ))}
       </nav>
 
-      {/* Footer */}
+      {/* User Info & Sign Out */}
       <div className="p-3 border-t border-gray-200">
-        <div className="px-3 py-2 text-xs text-gray-400">
-          Window Measurement App
+        <div className="flex items-center gap-3 px-3 py-2">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-600">
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+            <p className="text-xs text-gray-500 truncate">{email}</p>
+          </div>
         </div>
+        <button
+          onClick={() => signOut()}
+          className="w-full mt-1 flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Sign Out
+        </button>
       </div>
     </>
   )

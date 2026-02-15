@@ -1,10 +1,23 @@
 import type { WindowRow } from './supabase';
 import { formatFraction } from './measurements';
 
+interface PDFJobInfo {
+  poNumber: string;
+  clientName?: string;
+  clientAddress?: string;
+  clientCity?: string;
+  clientState?: string;
+  clientZip?: string;
+}
+
 export async function generatePDF(
   windows: WindowRow[],
-  poNumber: string
+  jobInfo: string | PDFJobInfo
 ): Promise<void> {
+  const info: PDFJobInfo = typeof jobInfo === 'string'
+    ? { poNumber: jobInfo }
+    : jobInfo;
+
   const { default: jsPDF } = await import('jspdf');
   await import('jspdf-autotable');
 
@@ -29,11 +42,27 @@ export async function generatePDF(
   y += 20;
   doc.setFontSize(12);
   doc.setTextColor(...darkGray);
-  doc.text(`PO Number: ${poNumber}`, margin, y);
+  doc.text(`PO Number: ${info.poNumber}`, margin, y);
   doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - margin, y, {
     align: 'right',
   });
-  y += 25;
+  y += 16;
+
+  // Client info if available
+  if (info.clientName) {
+    doc.setFontSize(10);
+    doc.setTextColor(...midGray);
+    doc.text(info.clientName, margin, y);
+    y += 14;
+  }
+  if (info.clientAddress) {
+    doc.setFontSize(10);
+    doc.setTextColor(...midGray);
+    const addrParts = [info.clientAddress, info.clientCity, info.clientState, info.clientZip].filter(Boolean);
+    doc.text(addrParts.join(', '), margin, y);
+    y += 14;
+  }
+  y += 9;
 
   windows.forEach((w) => {
     const blockStartY = y;
@@ -156,7 +185,7 @@ export async function generatePDF(
     y = blockStartY + calculatedHeight + 15;
   });
 
-  const fileName = `${poNumber}_Window_Measurements.pdf`;
+  const fileName = `${info.poNumber}_Window_Measurements.pdf`;
   const file = new File([doc.output('blob')], fileName, {
     type: 'application/pdf',
   });
@@ -166,7 +195,7 @@ export async function generatePDF(
       await navigator.share({
         files: [file],
         title: fileName,
-        text: `Window measurements for PO ${poNumber}`,
+        text: `Window measurements for PO ${info.poNumber}`,
       });
     } catch {
       doc.save(fileName);

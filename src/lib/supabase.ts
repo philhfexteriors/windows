@@ -5,9 +5,46 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// ===== JOB TYPES =====
+
+export type JobStatus = 'draft' | 'windows_imported' | 'configured' | 'approved' | 'measuring' | 'complete';
+
+export interface Job {
+  id: string;
+  created_by: string;
+  assigned_to: string | null;
+  po_number: string;
+  client_name: string | null;
+  client_address: string | null;
+  client_city: string | null;
+  client_state: string | null;
+  client_zip: string | null;
+  cc_project_id: string | null;
+  cc_project_number: string | null;
+  hover_job_id: number | null;
+  hover_model_ids: { id: number; name: string; state: string }[] | null;
+  status: JobStatus;
+  approved_at: string | null;
+  approved_by: string | null;
+  completed_at: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type JobInsert = Omit<Job, 'id' | 'created_at' | 'updated_at' | 'approved_at' | 'approved_by' | 'completed_at'>;
+
+export interface JobWithCounts extends Job {
+  total_windows: number;
+  measured_windows: number;
+}
+
+// ===== WINDOW TYPES =====
+
 export interface WindowRow {
   id: string;
   po_number: string;
+  job_id: string | null;
   label: string | null;
   location: string;
   type: string;
@@ -203,10 +240,12 @@ export async function fetchRecentMeasurements(limit = 10): Promise<WindowRow[]> 
 
 export async function bulkInsertWindows(
   poNumber: string,
-  rows: Partial<Omit<WindowRow, 'id' | 'po_number' | 'created_at' | 'updated_at'>>[]
+  rows: Partial<Omit<WindowRow, 'id' | 'po_number' | 'created_at' | 'updated_at'>>[],
+  jobId?: string
 ): Promise<WindowRow[]> {
   const inserts = rows.map((row) => ({
     po_number: poNumber,
+    job_id: jobId || row.job_id || null,
     label: row.label || null,
     location: row.location || '',
     type: row.type || '',
@@ -235,4 +274,146 @@ export async function bulkInsertWindows(
 
   if (error) throw error;
   return data as WindowRow[];
+}
+
+// ===== JOB FUNCTIONS =====
+
+export async function fetchJobs(statusFilter?: JobStatus): Promise<JobWithCounts[]> {
+  let query = supabase
+    .from('jobs')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (statusFilter) {
+    query = query.eq('status', statusFilter);
+  }
+
+  const { data: jobs, error } = await query;
+  if (error) throw error;
+
+  // Fetch window counts for each job
+  const jobIds = (jobs as Job[]).map((j) => j.id);
+  if (jobIds.length === 0) return [];
+
+  const { data: windows, error: wError } = await supabase
+    .from('windows')
+    .select('job_id, status')
+    .in('job_id', jobIds);
+
+  if (wError) throw wError;
+
+  const countMap = new Map<string, { total: number; measured: number }>();
+  for (const w of windows || []) {
+    const existing = countMap.get(w.job_id) || { total: 0, measured: 0 };
+    existing.total++;
+    if (w.status === 'measured') existing.measured++;
+    countMap.set(w.job_id, existing);
+  }
+
+  return (jobs as Job[]).map((j) => ({
+    ...j,
+    total_windows: countMap.get(j.id)?.total || 0,
+    measured_windows: countMap.get(j.id)?.measured || 0,
+  }));
+}
+
+export async function fetchJob(id: string): Promise<Job> {
+  const { data, error } = await supabase
+    .from('jobs')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return data as Job;
+}
+
+export async function createJob(
+  data: Partial<Omit<Job, 'id' | 'created_at' | 'updated_at'>>
+): Promise<Job> {
+  const { data: job, error } = await supabase
+    .from('jobs')
+    .insert({
+      created_by: data.created_by!,
+      po_number: data.po_number!,
+      client_name: data.client_name || null,
+      client_address: data.client_address || null,
+      client_city: data.client_city || null,
+      client_state: data.client_state || null,
+      client_zip: data.client_zip || null,
+      cc_project_id: data.cc_project_id || null,
+      cc_project_number: data.cc_project_number || null,
+      hover_job_id: data.hover_job_id || null,
+      hover_model_ids: data.hover_model_ids || null,
+      status: data.status || 'draft',
+      notes: data.notes || '',
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return job as Job;
+}
+
+export async function updateJob(
+  id: string,
+  data: Partial<Omit<Job, 'id' | 'created_by' | 'created_at'>>
+): Promise<Job> {
+  const { data: job, error } = await supabase
+    .from('jobs')
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return job as Job;
+}
+
+export async function deleteJob(id: string): Promise<void> {
+  const { error } = await supabase.from('jobs').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchWindowsByJobId(jobId: string): Promise<WindowRow[]> {
+  const { data, error } = await supabase
+    .from('windows')
+    .select('*')
+    .eq('job_id', jobId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data as WindowRow[];
+}
+
+export async function addJobActivity(
+  jobId: string,
+  userId: string,
+  action: string,
+  details?: Record<string, unknown>
+): Promise<void> {
+  const { error } = await supabase
+    .from('job_activity')
+    .insert({ job_id: jobId, user_id: userId, action, details: details || null });
+
+  if (error) throw error;
+}
+
+export function subscribeToJob(
+  jobId: string,
+  onUpdate: () => void
+): RealtimeChannel {
+  return supabase
+    .channel(`job:${jobId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'jobs', filter: `id=eq.${jobId}` },
+      () => onUpdate()
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'windows', filter: `job_id=eq.${jobId}` },
+      () => onUpdate()
+    )
+    .subscribe();
 }

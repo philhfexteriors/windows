@@ -5,11 +5,14 @@ import { useSearchParams } from 'next/navigation';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   fetchWindows,
+  fetchWindowsByJobId,
+  fetchJob,
   subscribeToWindows,
   addWindow,
   updateWindow,
   removeWindow,
   type WindowRow,
+  type Job,
 } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdf';
 import AppShell from '@/components/AppShell';
@@ -27,8 +30,10 @@ function MeasurementsContent() {
   const searchParams = useSearchParams();
   const initialPO = searchParams.get('po');
   const initialEditId = searchParams.get('edit');
+  const jobId = searchParams.get('job');
 
   const [currentPO, setCurrentPO] = useState<string | null>(null);
+  const [currentJob, setCurrentJob] = useState<Job | null>(null);
   const [windows, setWindows] = useState<WindowRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingWindow, setEditingWindow] = useState<WindowRow | null>(null);
@@ -99,15 +104,47 @@ function MeasurementsContent() {
     [showStatus, refreshWindows]
   );
 
-  // Auto-load PO from URL params on mount
+  // Auto-load from URL params on mount (job_id or PO)
   useEffect(() => {
     if (initialLoadDone.current) return;
+
+    if (jobId) {
+      initialLoadDone.current = true;
+      (async () => {
+        try {
+          setLoading(true);
+          const [job, jobWindows] = await Promise.all([
+            fetchJob(jobId),
+            fetchWindowsByJobId(jobId),
+          ]);
+          setCurrentJob(job);
+          setCurrentPO(job.po_number);
+          setWindows(jobWindows);
+          showStatus(`Loaded job: ${job.po_number}. Found ${jobWindows.length} window(s).`, false);
+
+          channelRef.current = subscribeToWindows(job.po_number, () => {
+            refreshWindows(job.po_number);
+          });
+
+          if (initialEditId && jobWindows.length > 0) {
+            const windowToEdit = jobWindows.find((w: WindowRow) => w.id === initialEditId);
+            if (windowToEdit) setEditingWindow(windowToEdit);
+          }
+        } catch (err) {
+          console.error('Error loading job:', err);
+          showStatus('Error loading job. Check connection and try again.');
+        } finally {
+          setLoading(false);
+        }
+      })();
+      return;
+    }
+
     if (!initialPO) return;
 
     initialLoadDone.current = true;
 
     handleLoadPO(initialPO).then((loadedWindows) => {
-      // If ?edit=<id> is present, open that window for editing
       if (initialEditId && loadedWindows.length > 0) {
         const windowToEdit = loadedWindows.find((w: WindowRow) => w.id === initialEditId);
         if (windowToEdit) {
@@ -115,7 +152,7 @@ function MeasurementsContent() {
         }
       }
     });
-  }, [initialPO, initialEditId, handleLoadPO]);
+  }, [initialPO, initialEditId, jobId, handleLoadPO, showStatus, refreshWindows]);
 
   const handleSave = useCallback(
     async (
@@ -236,24 +273,36 @@ function MeasurementsContent() {
           <div>
             <p className="text-sm text-gray-500">Current Job</p>
             <p className="text-lg font-bold text-primary">{currentPO}</p>
+            {currentJob?.client_name && (
+              <p className="text-sm text-gray-600">{currentJob.client_name}</p>
+            )}
             <p className="text-sm text-gray-500">
               {windows.length} window(s), {measuredCount} measured
             </p>
           </div>
-          <button
-            onClick={() => {
-              setCurrentPO(null);
-              setWindows([]);
-              setEditingWindow(null);
-              if (channelRef.current) {
-                channelRef.current.unsubscribe();
-                channelRef.current = null;
-              }
-            }}
-            className="text-sm text-secondary hover:text-primary font-medium transition-colors"
-          >
-            Change Job
-          </button>
+          {currentJob ? (
+            <a
+              href={`/jobs/${currentJob.id}`}
+              className="text-sm text-secondary hover:text-primary font-medium transition-colors"
+            >
+              Back to Job
+            </a>
+          ) : (
+            <button
+              onClick={() => {
+                setCurrentPO(null);
+                setWindows([]);
+                setEditingWindow(null);
+                if (channelRef.current) {
+                  channelRef.current.unsubscribe();
+                  channelRef.current = null;
+                }
+              }}
+              className="text-sm text-secondary hover:text-primary font-medium transition-colors"
+            >
+              Change Job
+            </button>
+          )}
         </div>
       )}
 

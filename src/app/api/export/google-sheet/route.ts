@@ -1,0 +1,201 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { google } from 'googleapis';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { formatFraction } from '@/lib/measurements';
+
+export async function POST(request: NextRequest) {
+  const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+
+  if (!serviceEmail || !privateKey) {
+    return NextResponse.json(
+      { error: 'Google Sheets API not configured' },
+      { status: 503 }
+    );
+  }
+
+  const { jobId, userEmail } = await request.json();
+  if (!jobId) {
+    return NextResponse.json({ error: 'jobId required' }, { status: 400 });
+  }
+
+  try {
+    // Fetch job and windows from Supabase
+    const supabase = getSupabaseAdmin();
+    const { data: job, error: jobError } = await supabase
+      .from('jobs')
+      .select('*')
+      .eq('id', jobId)
+      .single();
+
+    if (jobError || !job) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    }
+
+    const { data: windows, error: winError } = await supabase
+      .from('windows')
+      .select('*')
+      .eq('job_id', jobId)
+      .order('created_at', { ascending: true });
+
+    if (winError) {
+      return NextResponse.json({ error: 'Failed to fetch windows' }, { status: 500 });
+    }
+
+    // Create Google Sheets client
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: serviceEmail,
+        private_key: privateKey.replace(/\\n/g, '\n'),
+      },
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive',
+      ],
+    });
+
+    const sheets = google.sheets({ version: 'v4', auth });
+    const drive = google.drive({ version: 'v3', auth });
+
+    // Create the spreadsheet
+    const title = `${job.po_number} - Windows Measurements${job.client_name ? ` - ${job.client_name}` : ''}`;
+
+    const spreadsheet = await sheets.spreadsheets.create({
+      requestBody: {
+        properties: { title },
+        sheets: [{
+          properties: {
+            title: 'Measurements',
+            gridProperties: { frozenRowCount: 4 },
+          },
+        }],
+      },
+    });
+
+    const spreadsheetId = spreadsheet.data.spreadsheetId!;
+    const sheetId = spreadsheet.data.sheets![0].properties!.sheetId!;
+
+    // Build the data rows
+    const headerRows = [
+      ['H&F Exteriors — Window Measurements'],
+      [`PO: ${job.po_number}`, '', `Client: ${job.client_name || ''}`, '', `Date: ${new Date().toLocaleDateString()}`],
+      [
+        `Address: ${[job.client_address, job.client_city, job.client_state, job.client_zip].filter(Boolean).join(', ')}`,
+      ],
+      [], // Empty row before data
+    ];
+
+    const columnHeaders = [
+      'Label', 'Location', 'Type', 'Approx W', 'Approx H',
+      'Final W', 'Final H', 'Grid', 'Temper', 'Screen',
+      'Ext Color', 'Int Color', 'Notes', 'Status',
+    ];
+
+    const dataRows = (windows || []).map((w: Record<string, unknown>) => [
+      w.label || '',
+      w.location || '',
+      w.type || '',
+      w.approx_width || '',
+      w.approx_height || '',
+      w.final_w != null ? formatFraction(w.final_w as number) + '"' : '',
+      w.final_h != null ? formatFraction(w.final_h as number) + '"' : '',
+      w.grid_style || '',
+      w.temper || '',
+      w.screen || '',
+      w.outside_color || '',
+      w.inside_color || '',
+      w.notes || '',
+      w.status || '',
+    ]);
+
+    // Summary row
+    const measuredCount = (windows || []).filter((w: Record<string, unknown>) => w.status === 'measured').length;
+    const summaryRow = ['', '', '', '', '', '', '', '', '', '', '', '',
+      `Total: ${(windows || []).length} windows, ${measuredCount} measured`,
+      '',
+    ];
+
+    const allRows = [
+      ...headerRows,
+      columnHeaders,
+      ...dataRows,
+      [], // Empty row
+      summaryRow,
+    ];
+
+    // Write data to sheet
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: 'Measurements!A1',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: allRows },
+    });
+
+    // Format the sheet
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          // Title formatting (row 1)
+          {
+            repeatCell: {
+              range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 14 },
+              cell: {
+                userEnteredFormat: {
+                  backgroundColor: { red: 0.616, green: 0.133, blue: 0.208 }, // #9D2235
+                  textFormat: { bold: true, fontSize: 14, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                },
+              },
+              fields: 'userEnteredFormat(textFormat,backgroundColor)',
+            },
+          },
+          // Column header formatting (row 5 = index 4)
+          {
+            repeatCell: {
+              range: { sheetId, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 0, endColumnIndex: 14 },
+              cell: {
+                userEnteredFormat: {
+                  textFormat: { bold: true, fontSize: 10 },
+                  backgroundColor: { red: 0.93, green: 0.93, blue: 0.93 },
+                  borders: {
+                    bottom: { style: 'SOLID', width: 1 },
+                  },
+                },
+              },
+              fields: 'userEnteredFormat(textFormat,backgroundColor,borders)',
+            },
+          },
+          // Auto-resize columns
+          {
+            autoResizeDimensions: {
+              dimensions: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 14 },
+            },
+          },
+        ],
+      },
+    });
+
+    // Share with user if email provided
+    if (userEmail) {
+      await drive.permissions.create({
+        fileId: spreadsheetId,
+        requestBody: {
+          type: 'user',
+          role: 'writer',
+          emailAddress: userEmail,
+        },
+        sendNotificationEmail: false,
+      });
+    }
+
+    const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+
+    return NextResponse.json({ url: sheetUrl, spreadsheetId });
+  } catch (err) {
+    console.error('Google Sheets export error:', err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to create Google Sheet' },
+      { status: 500 }
+    );
+  }
+}
