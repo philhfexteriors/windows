@@ -36,6 +36,32 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await res.json();
+
+    // Flatten account name into each project for easier client-side use
+    if (data.data && Array.isArray(data.data)) {
+      // JSON:API format: { data: [...], included: [...] }
+      if (data.included && Array.isArray(data.included)) {
+        const accountMap = new Map<string, string>();
+        for (const inc of data.included) {
+          if (inc.type === 'accounts' && inc.attributes?.name) {
+            accountMap.set(String(inc.id), inc.attributes.name);
+          }
+        }
+        for (const project of data.data) {
+          const accountRef = project.relationships?.account?.data;
+          if (accountRef && accountMap.has(String(accountRef.id))) {
+            project.account_name = accountMap.get(String(accountRef.id));
+          }
+        }
+      }
+      // Flat format: account might be embedded directly
+      for (const project of data.data) {
+        if (!project.account_name && project.account?.name) {
+          project.account_name = project.account.name;
+        }
+      }
+    }
+
     return NextResponse.json(data);
   } catch (err) {
     return NextResponse.json(

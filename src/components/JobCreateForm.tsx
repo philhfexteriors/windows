@@ -26,7 +26,7 @@ export default function JobCreateForm() {
     setCcProjectId(String(project.id));
     setCcProjectNumber(project.number);
     if (!poNumber) setPoNumber(project.number || project.name);
-    setClientName(project.name);
+    setClientName(project.account_name || project.name);
     setClientAddress(project.address_street || '');
     setClientCity(project.address_city || '');
     setClientState(project.address_state || '');

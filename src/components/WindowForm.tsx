@@ -301,10 +301,10 @@ export default function WindowForm({
           </p>
           <div className="flex gap-4 mt-1 text-sm text-amber-700">
             {editingWindow.approx_width && (
-              <span>Width: ~{editingWindow.approx_width}&quot;</span>
+              <span>Width: ~{editingWindow.approx_width.replace(/"+$/, '')}&quot;</span>
             )}
             {editingWindow.approx_height && (
-              <span>Height: ~{editingWindow.approx_height}&quot;</span>
+              <span>Height: ~{editingWindow.approx_height.replace(/"+$/, '')}&quot;</span>
             )}
             {editingWindow.label && <span>Label: #{editingWindow.label}</span>}
           </div>
