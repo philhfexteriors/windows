@@ -5,13 +5,34 @@ import { formatFraction } from '@/lib/measurements';
 
 export async function POST(request: NextRequest) {
   const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+  const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
 
-  if (!serviceEmail || !privateKey) {
+  if (!serviceEmail || !rawKey) {
     return NextResponse.json(
       { error: 'Google Sheets API not configured' },
       { status: 503 }
     );
+  }
+
+  // Handle various ways the key may be stored in env vars:
+  // - Wrapped in extra quotes from Vercel/dotenv
+  // - Literal \n instead of real newlines
+  // - Base64-encoded
+  let privateKey = rawKey;
+  // Strip surrounding quotes if present
+  if ((privateKey.startsWith('"') && privateKey.endsWith('"')) ||
+      (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
+    privateKey = privateKey.slice(1, -1);
+  }
+  // Replace literal \n with actual newlines
+  privateKey = privateKey.replace(/\\n/g, '\n');
+  // If base64-encoded (no PEM header), decode it
+  if (!privateKey.includes('-----BEGIN')) {
+    try {
+      privateKey = Buffer.from(privateKey, 'base64').toString('utf-8');
+    } catch {
+      // Not base64, use as-is
+    }
   }
 
   const { jobId, userEmail } = await request.json();
@@ -46,7 +67,7 @@ export async function POST(request: NextRequest) {
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: serviceEmail,
-        private_key: privateKey.replace(/\\n/g, '\n'),
+        private_key: privateKey,
       },
       scopes: [
         'https://www.googleapis.com/auth/spreadsheets',
