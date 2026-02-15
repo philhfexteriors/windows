@@ -46,7 +46,13 @@ export default function ExportPanel({ job, windows }: Props) {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Export failed');
+        // Show full error detail for debugging
+        const detail = data.googleError
+          ? JSON.stringify(data.googleError)
+          : data.detail || '';
+        throw new Error(
+          `${data.error || 'Export failed'}${detail ? ': ' + detail : ''}`
+        );
       }
 
       const { url } = await res.json();

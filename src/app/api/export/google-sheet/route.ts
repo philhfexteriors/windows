@@ -116,13 +116,17 @@ export async function POST(request: NextRequest) {
 
     } catch (createErr) {
       console.error('Spreadsheet create failed:', createErr);
-      const gErr = createErr as Record<string, unknown>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const gErr = createErr as any;
+      const responseData = gErr?.response?.data;
+      const errorDetails = responseData?.error;
       return NextResponse.json(
         {
           error: 'Failed to create spreadsheet',
           detail: gErr?.message || String(createErr),
-          status: gErr?.code,
-          errors: gErr?.errors,
+          googleError: errorDetails || null,
+          httpStatus: gErr?.response?.status || gErr?.code || null,
+          responseBody: responseData || null,
         },
         { status: 500 }
       );
