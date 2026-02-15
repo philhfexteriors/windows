@@ -10,10 +10,10 @@ interface PDFJobInfo {
   clientZip?: string;
 }
 
-export async function generatePDF(
+export async function generatePDFBlob(
   windows: WindowRow[],
   jobInfo: string | PDFJobInfo
-): Promise<void> {
+): Promise<{ blob: Blob; fileName: string }> {
   const info: PDFJobInfo = typeof jobInfo === 'string'
     ? { poNumber: jobInfo }
     : jobInfo;
@@ -186,21 +186,40 @@ export async function generatePDF(
   });
 
   const fileName = `${info.poNumber}_Window_Measurements.pdf`;
-  const file = new File([doc.output('blob')], fileName, {
-    type: 'application/pdf',
-  });
+  const blob = doc.output('blob');
+
+  return { blob, fileName };
+}
+
+export async function generatePDF(
+  windows: WindowRow[],
+  jobInfo: string | PDFJobInfo
+): Promise<void> {
+  const { blob, fileName } = await generatePDFBlob(windows, jobInfo);
+
+  const file = new File([blob], fileName, { type: 'application/pdf' });
 
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
         files: [file],
         title: fileName,
-        text: `Window measurements for PO ${info.poNumber}`,
+        text: `Window measurements for PO ${(typeof jobInfo === 'string' ? jobInfo : jobInfo.poNumber)}`,
       });
     } catch {
-      doc.save(fileName);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
     }
   } else {
-    doc.save(fileName);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }

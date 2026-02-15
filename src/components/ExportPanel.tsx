@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useAuthContext } from '@/components/AuthProvider';
 import type { WindowRow, Job } from '@/lib/supabase';
-import { generatePDF } from '@/lib/pdf';
+import { generatePDF, generatePDFBlob } from '@/lib/pdf';
 
 interface Props {
   job: Job;
@@ -13,11 +13,23 @@ interface Props {
 export default function ExportPanel({ job, windows }: Props) {
   const { user } = useAuthContext();
   const [exporting, setExporting] = useState(false);
+  const [sendingCC, setSendingCC] = useState(false);
   const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+  const [ccSuccess, setCcSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const measuredWindows = windows.filter((w) => w.status === 'measured');
   const hasData = measuredWindows.length > 0;
+  const hasCCProject = !!job.cc_project_id;
+
+  const pdfJobInfo = {
+    poNumber: job.po_number,
+    clientName: job.client_name || undefined,
+    clientAddress: job.client_address || undefined,
+    clientCity: job.client_city || undefined,
+    clientState: job.client_state || undefined,
+    clientZip: job.client_zip || undefined,
+  };
 
   const handleGoogleSheet = async () => {
     setExporting(true);
@@ -49,14 +61,36 @@ export default function ExportPanel({ job, windows }: Props) {
 
   const handlePDF = () => {
     if (!hasData) return;
-    generatePDF(measuredWindows, {
-      poNumber: job.po_number,
-      clientName: job.client_name || undefined,
-      clientAddress: job.client_address || undefined,
-      clientCity: job.client_city || undefined,
-      clientState: job.client_state || undefined,
-      clientZip: job.client_zip || undefined,
-    });
+    generatePDF(measuredWindows, pdfJobInfo);
+  };
+
+  const handleSendToCC = async () => {
+    if (!hasData || !hasCCProject) return;
+    setSendingCC(true);
+    setError(null);
+    setCcSuccess(false);
+    try {
+      const { blob, fileName } = await generatePDFBlob(measuredWindows, pdfJobInfo);
+
+      const formData = new FormData();
+      formData.append('file', blob, fileName);
+
+      const res = await fetch(`/api/cc/projects/${job.cc_project_id}/files`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Upload to CC failed');
+      }
+
+      setCcSuccess(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send to CC');
+    } finally {
+      setSendingCC(false);
+    }
   };
 
   return (
@@ -87,6 +121,12 @@ export default function ExportPanel({ job, windows }: Props) {
         </div>
       )}
 
+      {ccSuccess && (
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-700">PDF uploaded to Contractors Cloud!</p>
+        </div>
+      )}
+
       <div className="flex gap-2">
         <button
           onClick={handleGoogleSheet}
@@ -113,7 +153,29 @@ export default function ExportPanel({ job, windows }: Props) {
           </svg>
           PDF
         </button>
+
+        <button
+          onClick={handleSendToCC}
+          disabled={!hasData || !hasCCProject || sendingCC}
+          title={!hasCCProject ? 'No CC project linked to this job' : undefined}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {sendingCC ? (
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+          )}
+          {sendingCC ? 'Sending...' : 'Send to CC'}
+        </button>
       </div>
+
+      {!hasCCProject && hasData && (
+        <p className="text-xs text-gray-400">
+          Send to CC is unavailable — this job is not linked to a Contractors Cloud project.
+        </p>
+      )}
     </div>
   );
 }
