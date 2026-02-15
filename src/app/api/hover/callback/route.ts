@@ -7,24 +7,25 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const error = searchParams.get('error');
 
-  // Build the origin for redirect
-  const origin = request.headers.get('x-forwarded-host')
-    ? `https://${request.headers.get('x-forwarded-host')}`
-    : new URL(request.url).origin;
+  // Use NEXT_PUBLIC_APP_URL if set, otherwise derive from request
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    || (request.headers.get('x-forwarded-host')
+      ? `https://${request.headers.get('x-forwarded-host')}`
+      : new URL(request.url).origin);
 
   if (error) {
-    return NextResponse.redirect(`${origin}/jobs?hover_error=${encodeURIComponent(error)}`);
+    return NextResponse.redirect(`${appUrl}/jobs?hover_error=${encodeURIComponent(error)}`);
   }
 
   if (!code) {
-    return NextResponse.redirect(`${origin}/jobs?hover_error=no_code`);
+    return NextResponse.redirect(`${appUrl}/jobs?hover_error=no_code`);
   }
 
-  const redirectUri = `${origin}/api/hover/callback`;
+  const redirectUri = `${appUrl}/api/hover/callback`;
   const tokens = await exchangeHoverCode(code, redirectUri);
 
   if (!tokens) {
-    return NextResponse.redirect(`${origin}/jobs?hover_error=token_exchange_failed`);
+    return NextResponse.redirect(`${appUrl}/jobs?hover_error=token_exchange_failed`);
   }
 
   // Store tokens in Supabase
@@ -42,8 +43,8 @@ export async function GET(request: NextRequest) {
 
   if (insertError) {
     console.error('Failed to store Hover tokens:', insertError);
-    return NextResponse.redirect(`${origin}/jobs?hover_error=storage_failed`);
+    return NextResponse.redirect(`${appUrl}/jobs?hover_error=storage_failed`);
   }
 
-  return NextResponse.redirect(`${origin}/jobs?hover_connected=true`);
+  return NextResponse.redirect(`${appUrl}/jobs?hover_connected=true`);
 }
