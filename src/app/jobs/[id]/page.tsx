@@ -13,6 +13,8 @@ import {
   updateJob,
   addJobActivity,
   subscribeToJob,
+  removeWindow,
+  deleteWindowsByJobId,
   Job,
   WindowRow,
 } from '@/lib/supabase';
@@ -69,6 +71,29 @@ export default function JobDetailPage() {
       loadData();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to start measuring');
+    }
+  };
+
+  const handleDeleteWindow = async (windowId: string) => {
+    if (!confirm('Delete this window?')) return;
+    try {
+      await removeWindow(windowId);
+      loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete window');
+    }
+  };
+
+  const handleDeleteAllWindows = async () => {
+    if (!job || !user) return;
+    if (!confirm(`Delete all ${windows.length} windows from this job? This cannot be undone.`)) return;
+    try {
+      await deleteWindowsByJobId(job.id);
+      await updateJob(job.id, { status: 'draft', hover_job_id: null, hover_model_ids: null });
+      await addJobActivity(job.id, user.id, 'windows_deleted', { count: windows.length });
+      loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete windows');
     }
   };
 
@@ -174,16 +199,24 @@ export default function JobDetailPage() {
           <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Windows ({windows.length})</h2>
-              <Link
-                href={`/jobs/${job.id}/import`}
-                className="text-sm text-primary hover:underline"
-              >
-                Add more windows
-              </Link>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleDeleteAllWindows}
+                  className="text-sm text-red-500 hover:text-red-700"
+                >
+                  Delete All
+                </button>
+                <Link
+                  href={`/jobs/${job.id}/import`}
+                  className="text-sm text-primary hover:underline"
+                >
+                  Add more windows
+                </Link>
+              </div>
             </div>
             <div className="grid gap-2">
               {windows.map((w) => (
-                <div key={w.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div key={w.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg group">
                   <div className="w-10 h-10 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-xs font-mono text-gray-600">
                     {w.label || '?'}
                   </div>
@@ -197,6 +230,15 @@ export default function JobDetailPage() {
                       {[w.grid_style, w.screen, w.outside_color].filter(Boolean).join(' / ') || 'No specs configured'}
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleDeleteWindow(w.id)}
+                    className="p-1.5 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 sm:opacity-100"
+                    title="Delete window"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                     w.status === 'measured' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                   }`}>

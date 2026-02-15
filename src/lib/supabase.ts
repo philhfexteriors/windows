@@ -387,6 +387,15 @@ export async function fetchWindowsByJobId(jobId: string): Promise<WindowRow[]> {
   return data as WindowRow[];
 }
 
+export async function deleteWindowsByJobId(jobId: string): Promise<void> {
+  const { error } = await supabase
+    .from('windows')
+    .delete()
+    .eq('job_id', jobId);
+
+  if (error) throw error;
+}
+
 export async function addJobActivity(
   jobId: string,
   userId: string,
