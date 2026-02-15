@@ -26,13 +26,15 @@ export default function FractionInput({
       </label>
       <div className="flex gap-2">
         <input
-          type="number"
+          type="text"
           inputMode="numeric"
+          pattern="[0-9]*"
           placeholder={placeholder}
           value={wholeValue}
-          onChange={(e) => onWholeChange(e.target.value)}
-          min="0"
-          step="1"
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^0-9]/g, '');
+            onWholeChange(v);
+          }}
           className="flex-1 px-2 py-2 text-center border border-gray-300 rounded-lg"
         />
         <select
