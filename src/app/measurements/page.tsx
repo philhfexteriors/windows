@@ -269,40 +269,47 @@ function MeasurementsContent() {
 
       {/* When a PO is loaded, show the PO header with change button */}
       {currentPO && (
-        <div className="bg-white p-4 rounded-xl shadow-md mb-6 flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-500">Current Job</p>
-            <p className="text-lg font-bold text-primary">{currentPO}</p>
-            {currentJob?.client_name && (
-              <p className="text-sm text-gray-600">{currentJob.client_name}</p>
+        <div className="bg-white p-4 rounded-xl shadow-md mb-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Current Job</p>
+              <p className="text-lg font-bold text-primary">{currentPO}</p>
+              {currentJob?.client_name && (
+                <p className="text-sm font-medium text-gray-800">{currentJob.client_name}</p>
+              )}
+              {currentJob?.client_address && (
+                <p className="text-sm text-gray-500">
+                  {[currentJob.client_address, currentJob.client_city, currentJob.client_state, currentJob.client_zip].filter(Boolean).join(', ')}
+                </p>
+              )}
+              <p className="text-sm text-gray-500 mt-1">
+                {windows.length} window(s), {measuredCount} measured
+              </p>
+            </div>
+            {currentJob ? (
+              <a
+                href={`/jobs/${currentJob.id}`}
+                className="text-sm text-secondary hover:text-primary font-medium transition-colors"
+              >
+                Back to Job
+              </a>
+            ) : (
+              <button
+                onClick={() => {
+                  setCurrentPO(null);
+                  setWindows([]);
+                  setEditingWindow(null);
+                  if (channelRef.current) {
+                    channelRef.current.unsubscribe();
+                    channelRef.current = null;
+                  }
+                }}
+                className="text-sm text-secondary hover:text-primary font-medium transition-colors"
+              >
+                Change Job
+              </button>
             )}
-            <p className="text-sm text-gray-500">
-              {windows.length} window(s), {measuredCount} measured
-            </p>
           </div>
-          {currentJob ? (
-            <a
-              href={`/jobs/${currentJob.id}`}
-              className="text-sm text-secondary hover:text-primary font-medium transition-colors"
-            >
-              Back to Job
-            </a>
-          ) : (
-            <button
-              onClick={() => {
-                setCurrentPO(null);
-                setWindows([]);
-                setEditingWindow(null);
-                if (channelRef.current) {
-                  channelRef.current.unsubscribe();
-                  channelRef.current = null;
-                }
-              }}
-              className="text-sm text-secondary hover:text-primary font-medium transition-colors"
-            >
-              Change Job
-            </button>
-          )}
         </div>
       )}
 
