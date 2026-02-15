@@ -172,49 +172,67 @@ export default function WindowSelector({ windows, onSave, saving }: Props) {
                         {w.roundedWidth}&quot; x {w.roundedHeight}&quot;
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                      <select
-                        value={spec.type}
-                        onChange={(e) => updateSpec(w.label, 'type', e.target.value)}
-                        className="px-2 py-1 border border-gray-200 rounded text-xs"
-                      >
-                        {WINDOW_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <select
-                        value={spec.grid_style}
-                        onChange={(e) => updateSpec(w.label, 'grid_style', e.target.value)}
-                        className="px-2 py-1 border border-gray-200 rounded text-xs"
-                      >
-                        {GRID_STYLES.map((g) => <option key={g} value={g}>{g}</option>)}
-                      </select>
-                      <select
-                        value={spec.screen}
-                        onChange={(e) => updateSpec(w.label, 'screen', e.target.value)}
-                        className="px-2 py-1 border border-gray-200 rounded text-xs"
-                      >
-                        {SCREEN_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                      <select
-                        value={spec.temper}
-                        onChange={(e) => updateSpec(w.label, 'temper', e.target.value)}
-                        className="px-2 py-1 border border-gray-200 rounded text-xs"
-                      >
-                        {TEMPER_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <input
-                        type="text"
-                        value={spec.outside_color}
-                        onChange={(e) => updateSpec(w.label, 'outside_color', e.target.value)}
-                        placeholder="Ext color"
-                        className="px-2 py-1 border border-gray-200 rounded text-xs"
-                      />
-                      <input
-                        type="text"
-                        value={spec.inside_color}
-                        onChange={(e) => updateSpec(w.label, 'inside_color', e.target.value)}
-                        placeholder="Int color"
-                        className="px-2 py-1 border border-gray-200 rounded text-xs"
-                      />
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Type</label>
+                        <select
+                          value={spec.type}
+                          onChange={(e) => updateSpec(w.label, 'type', e.target.value)}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                        >
+                          {WINDOW_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Grid</label>
+                        <select
+                          value={spec.grid_style}
+                          onChange={(e) => updateSpec(w.label, 'grid_style', e.target.value)}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                        >
+                          {GRID_STYLES.map((g) => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Screen</label>
+                        <select
+                          value={spec.screen}
+                          onChange={(e) => updateSpec(w.label, 'screen', e.target.value)}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                        >
+                          {SCREEN_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Temper</label>
+                        <select
+                          value={spec.temper}
+                          onChange={(e) => updateSpec(w.label, 'temper', e.target.value)}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                        >
+                          {TEMPER_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Ext Color</label>
+                        <input
+                          type="text"
+                          value={spec.outside_color}
+                          onChange={(e) => updateSpec(w.label, 'outside_color', e.target.value)}
+                          placeholder="e.g., White"
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Int Color</label>
+                        <input
+                          type="text"
+                          value={spec.inside_color}
+                          onChange={(e) => updateSpec(w.label, 'inside_color', e.target.value)}
+                          placeholder="e.g., White"
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                        />
+                      </div>
                     </div>
                   </div>
                 );
