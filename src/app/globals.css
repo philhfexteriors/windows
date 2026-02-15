@@ -39,6 +39,13 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 2px var(--tw-ring-color);
 }
 
+/* Prevent iOS auto-zoom on input focus (all iOS browsers use WebKit) */
+@supports (-webkit-touch-callout: none) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: #f1f1f1; }
 ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
