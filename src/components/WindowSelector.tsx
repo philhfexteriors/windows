@@ -172,7 +172,7 @@ export default function WindowSelector({ windows, onSave, saving }: Props) {
                         {w.roundedWidth}&quot; x {w.roundedHeight}&quot;
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-500 mb-1">Type</label>
                         <select
