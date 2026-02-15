@@ -136,7 +136,9 @@ export default function ImportPage() {
 
       router.push(`/jobs/${job.id}`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to save windows');
+      console.error('Save windows error:', err);
+      const msg = err instanceof Error ? err.message : JSON.stringify(err);
+      alert('Failed to save windows: ' + msg);
     } finally {
       setSaving(false);
     }
