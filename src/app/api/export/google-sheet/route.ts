@@ -75,13 +75,34 @@ export async function POST(request: NextRequest) {
       ],
     });
 
+    // Verify auth works before proceeding
+    try {
+      const client = await auth.getClient();
+      console.log('Google auth client type:', client.constructor.name);
+    } catch (authErr) {
+      console.error('Google auth failed:', authErr);
+      return NextResponse.json(
+        {
+          error: 'Google authentication failed',
+          detail: authErr instanceof Error ? authErr.message : String(authErr),
+          keyStart: privateKey.substring(0, 30),
+          keyEnd: privateKey.substring(privateKey.length - 30),
+          keyLength: privateKey.length,
+          serviceEmail,
+        },
+        { status: 500 }
+      );
+    }
+
     const sheets = google.sheets({ version: 'v4', auth });
     const drive = google.drive({ version: 'v3', auth });
 
     // Create the spreadsheet
     const title = `${job.po_number} - Windows Measurements${job.client_name ? ` - ${job.client_name}` : ''}`;
 
-    const spreadsheet = await sheets.spreadsheets.create({
+    let spreadsheet;
+    try {
+      spreadsheet = await sheets.spreadsheets.create({
       requestBody: {
         properties: { title },
         sheets: [{
@@ -92,6 +113,20 @@ export async function POST(request: NextRequest) {
         }],
       },
     });
+
+    } catch (createErr) {
+      console.error('Spreadsheet create failed:', createErr);
+      const gErr = createErr as Record<string, unknown>;
+      return NextResponse.json(
+        {
+          error: 'Failed to create spreadsheet',
+          detail: gErr?.message || String(createErr),
+          status: gErr?.code,
+          errors: gErr?.errors,
+        },
+        { status: 500 }
+      );
+    }
 
     const spreadsheetId = spreadsheet.data.spreadsheetId!;
     const sheetId = spreadsheet.data.sheets![0].properties!.sheetId!;
