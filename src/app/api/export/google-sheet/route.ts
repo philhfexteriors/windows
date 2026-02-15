@@ -63,31 +63,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch windows' }, { status: 500 });
     }
 
-    // Create Google Sheets client
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: serviceEmail,
-        private_key: privateKey,
-      },
+    // Create Google Sheets client using domain-wide delegation
+    // The service account impersonates the user to create sheets in their Drive
+    const impersonateEmail = userEmail || process.env.GOOGLE_IMPERSONATE_EMAIL;
+    const auth = new google.auth.JWT({
+      email: serviceEmail,
+      key: privateKey,
       scopes: [
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive',
       ],
+      subject: impersonateEmail, // Act on behalf of this Workspace user
     });
 
     // Verify auth works before proceeding
     try {
-      const client = await auth.getClient();
-      console.log('Google auth client type:', client.constructor.name);
+      await auth.authorize();
     } catch (authErr) {
       console.error('Google auth failed:', authErr);
       return NextResponse.json(
         {
           error: 'Google authentication failed',
           detail: authErr instanceof Error ? authErr.message : String(authErr),
-          keyStart: privateKey.substring(0, 30),
-          keyEnd: privateKey.substring(privateKey.length - 30),
-          keyLength: privateKey.length,
+          impersonating: impersonateEmail,
           serviceEmail,
         },
         { status: 500 }
