@@ -326,6 +326,7 @@ function MeasurementsContent() {
       {/* Saved windows list */}
       <WindowList
         windows={windows}
+        job={currentJob}
         onMeasure={handleMeasure}
         onEdit={handleEdit}
         onDelete={handleDelete}

@@ -1,10 +1,12 @@
 'use client';
 
-import type { WindowRow } from '@/lib/supabase';
+import type { WindowRow, Job } from '@/lib/supabase';
 import WindowCard from './WindowCard';
+import ExportPanel from './ExportPanel';
 
 interface WindowListProps {
   windows: WindowRow[];
+  job?: Job | null;
   onMeasure: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
@@ -13,6 +15,7 @@ interface WindowListProps {
 
 export default function WindowList({
   windows,
+  job,
   onMeasure,
   onEdit,
   onDelete,
@@ -72,13 +75,19 @@ export default function WindowList({
         )}
       </div>
 
-      <button
-        onClick={onExportPDF}
-        disabled={measuredCount === 0}
-        className="w-full mt-6 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
-      >
-        Export PDF ({measuredCount} window{measuredCount !== 1 ? 's' : ''})
-      </button>
+      {job ? (
+        <div className="mt-6">
+          <ExportPanel job={job} windows={windows} />
+        </div>
+      ) : (
+        <button
+          onClick={onExportPDF}
+          disabled={measuredCount === 0}
+          className="w-full mt-6 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
+        >
+          Export PDF ({measuredCount} window{measuredCount !== 1 ? 's' : ''})
+        </button>
+      )}
     </div>
   );
 }
