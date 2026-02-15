@@ -17,3 +17,4 @@ ALTER TABLE hover_tokens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Authenticated users can read hover tokens" ON hover_tokens FOR SELECT USING (auth.uid() IS NOT NULL);
 CREATE POLICY "Authenticated users can insert hover tokens" ON hover_tokens FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "Authenticated users can update hover tokens" ON hover_tokens FOR UPDATE USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can delete hover tokens" ON hover_tokens FOR DELETE USING (auth.uid() IS NOT NULL);

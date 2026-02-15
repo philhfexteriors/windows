@@ -21,30 +21,36 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${appUrl}/jobs?hover_error=no_code`);
   }
 
-  const redirectUri = `${appUrl}/api/hover/callback`;
-  const tokens = await exchangeHoverCode(code, redirectUri);
+  try {
+    const redirectUri = `${appUrl}/api/hover/callback`;
+    const tokens = await exchangeHoverCode(code, redirectUri);
 
-  if (!tokens) {
-    return NextResponse.redirect(`${appUrl}/jobs?hover_error=token_exchange_failed`);
+    if (!tokens) {
+      return NextResponse.redirect(`${appUrl}/jobs?hover_error=token_exchange_failed`);
+    }
+
+    // Store tokens in Supabase
+    const supabase = getSupabaseAdmin();
+
+    // Delete any existing tokens (we only need one set org-wide)
+    await supabase.from('hover_tokens').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+    // Insert new tokens
+    const { error: insertError } = await supabase.from('hover_tokens').insert({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    });
+
+    if (insertError) {
+      console.error('Failed to store Hover tokens:', insertError);
+      return NextResponse.redirect(`${appUrl}/jobs?hover_error=${encodeURIComponent('storage: ' + insertError.message)}`);
+    }
+
+    return NextResponse.redirect(`${appUrl}/jobs?hover_connected=true`);
+  } catch (err) {
+    console.error('Hover callback error:', err);
+    const msg = err instanceof Error ? err.message : 'unknown error';
+    return NextResponse.redirect(`${appUrl}/jobs?hover_error=${encodeURIComponent('callback: ' + msg)}`);
   }
-
-  // Store tokens in Supabase
-  const supabase = getSupabaseAdmin();
-
-  // Delete any existing tokens (we only need one set org-wide)
-  await supabase.from('hover_tokens').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-  // Insert new tokens
-  const { error: insertError } = await supabase.from('hover_tokens').insert({
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-  });
-
-  if (insertError) {
-    console.error('Failed to store Hover tokens:', insertError);
-    return NextResponse.redirect(`${appUrl}/jobs?hover_error=storage_failed`);
-  }
-
-  return NextResponse.redirect(`${appUrl}/jobs?hover_connected=true`);
 }
