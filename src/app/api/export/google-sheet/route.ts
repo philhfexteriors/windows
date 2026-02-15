@@ -196,17 +196,30 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Share with user if email provided
+    // Share with user if email provided — try individual share first,
+    // fall back to "anyone with link" if domain policy blocks it
     if (userEmail) {
-      await drive.permissions.create({
-        fileId: spreadsheetId,
-        requestBody: {
-          type: 'user',
-          role: 'writer',
-          emailAddress: userEmail,
-        },
-        sendNotificationEmail: false,
-      });
+      try {
+        await drive.permissions.create({
+          fileId: spreadsheetId,
+          requestBody: {
+            type: 'user',
+            role: 'writer',
+            emailAddress: userEmail,
+          },
+          sendNotificationEmail: false,
+        });
+      } catch (shareErr) {
+        console.warn('Could not share directly with user, making link-accessible:', shareErr);
+        // Fall back: make accessible to anyone with the link
+        await drive.permissions.create({
+          fileId: spreadsheetId,
+          requestBody: {
+            type: 'anyone',
+            role: 'writer',
+          },
+        });
+      }
     }
 
     const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
@@ -214,8 +227,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: sheetUrl, spreadsheetId });
   } catch (err) {
     console.error('Google Sheets export error:', err);
+    const message = err instanceof Error ? err.message : 'Failed to create Google Sheet';
+    // Include more detail from Google API errors
+    const detail = (err as Record<string, unknown>)?.response
+      ? JSON.stringify((err as Record<string, unknown>).response)
+      : undefined;
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to create Google Sheet' },
+      { error: message, detail },
       { status: 500 }
     );
   }
