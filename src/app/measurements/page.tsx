@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   fetchWindows,
@@ -352,6 +353,24 @@ function MeasurementsContent() {
       {currentPO && !canMeasure && (
         <div className="mt-6 p-4 bg-gray-50 rounded-xl text-center">
           <p className="text-sm text-gray-500">You have view-only access to measurements. Submitting measurements requires the Field Tech role.</p>
+        </div>
+      )}
+
+      {/* Navigation buttons */}
+      {currentPO && (
+        <div className="mt-8 flex flex-col sm:flex-row gap-3">
+          <Link
+            href="/"
+            className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl font-medium text-sm text-center hover:bg-gray-50 transition-colors"
+          >
+            Save - Finish Later
+          </Link>
+          <Link
+            href="/"
+            className="flex-1 px-4 py-3 bg-primary text-white rounded-xl font-medium text-sm text-center hover:bg-primary-dark transition-colors"
+          >
+            Done - Return to Dashboard
+          </Link>
         </div>
       )}
     </>
