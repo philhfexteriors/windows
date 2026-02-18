@@ -83,50 +83,41 @@ export function useAuth(): BaseAuthState {
   }, []);
 
   useEffect(() => {
-    let didTimeout = false;
+    let resolved = false;
+    const done = () => {
+      if (!resolved) {
+        resolved = true;
+        setLoading(false);
+      }
+    };
 
-    // Safety timeout — never hang on the loading screen for more than 8 seconds
-    const timeout = setTimeout(() => {
-      didTimeout = true;
-      setLoading(false);
-    }, 8000);
+    // Safety timeout — never hang on the loading screen
+    const timeout = setTimeout(done, 3000);
 
-    // Get initial session — await profile before clearing loading state
-    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
-      setSession(s);
-      if (s?.user) {
-        try {
-          await loadProfile(s.user.id);
-        } catch (err) {
-          console.error('Failed to load profile:', err);
+    // Get initial session
+    supabase.auth.getSession()
+      .then(async ({ data: { session: s } }) => {
+        setSession(s);
+        if (s?.user) {
+          try { await loadProfile(s.user.id); } catch { /* ignore */ }
         }
-      }
-      if (!didTimeout) {
-        clearTimeout(timeout);
-        setLoading(false);
-      }
-    }).catch((err) => {
-      console.error('getSession failed:', err);
-      if (!didTimeout) {
-        clearTimeout(timeout);
-        setLoading(false);
-      }
-    });
+        done();
+      })
+      .catch(() => {
+        // AbortError from React 19 strict mode double-mount is expected
+        done();
+      });
 
-    // Listen for auth changes
+    // Listen for auth changes (also resolves loading if getSession was aborted)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, s) => {
         setSession(s);
         if (s?.user) {
-          try {
-            await loadProfile(s.user.id);
-          } catch (err) {
-            console.error('Failed to load profile on auth change:', err);
-          }
+          try { await loadProfile(s.user.id); } catch { /* ignore */ }
         } else {
           setProfile(null);
         }
-        setLoading(false);
+        done();
       }
     );
 
