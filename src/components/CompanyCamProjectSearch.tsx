@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 export interface CompanyCamProject {
   id: string;
@@ -27,6 +27,7 @@ export default function CompanyCamProjectSearch({ onSelect, jobAddress }: Props)
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const didAutoSearch = useRef(false);
 
   const doSearch = useCallback(async (term: string) => {
     if (term.length < 2) {
@@ -40,8 +41,8 @@ export default function CompanyCamProjectSearch({ onSelect, jobAddress }: Props)
     try {
       const res = await fetch(`/api/companycam/projects?query=${encodeURIComponent(term)}`);
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to search');
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Search failed (${res.status})`);
       }
       const data = await res.json();
       setResults(data.data || []);
@@ -49,10 +50,19 @@ export default function CompanyCamProjectSearch({ onSelect, jobAddress }: Props)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
       setResults([]);
+      setSearched(true);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // Auto-search on mount when jobAddress is pre-filled
+  useEffect(() => {
+    if (jobAddress && jobAddress.length >= 2 && !didAutoSearch.current) {
+      didAutoSearch.current = true;
+      doSearch(jobAddress);
+    }
+  }, [jobAddress, doSearch]);
 
   const handleChange = (value: string) => {
     setSearch(value);
