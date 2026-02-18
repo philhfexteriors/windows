@@ -427,3 +427,73 @@ export function subscribeToJob(
     )
     .subscribe();
 }
+
+// ===== ADMIN / RBAC FUNCTIONS =====
+
+import type { Profile } from './auth';
+import type { Role, Permission } from './permissions';
+
+export interface RolePermissionRow {
+  id: string;
+  role: string;
+  permission: string;
+  granted: boolean;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export async function fetchAllProfiles(): Promise<Profile[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .order('full_name', { ascending: true });
+
+  if (error) throw error;
+  return data as Profile[];
+}
+
+export async function updateProfileRole(
+  userId: string,
+  role: Role
+): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ role, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+
+  if (error) throw error;
+}
+
+export async function fetchRolePermissions(): Promise<RolePermissionRow[]> {
+  const { data, error } = await supabase
+    .from('role_permissions')
+    .select('*');
+
+  if (error) throw error;
+  return data as RolePermissionRow[];
+}
+
+export async function upsertRolePermission(
+  role: Role,
+  permission: Permission,
+  granted: boolean
+): Promise<void> {
+  if (granted) {
+    // Insert the permission row (granted=true)
+    const { error } = await supabase
+      .from('role_permissions')
+      .upsert(
+        { role, permission, granted: true, updated_at: new Date().toISOString() },
+        { onConflict: 'role,permission' }
+      );
+    if (error) throw error;
+  } else {
+    // Remove the permission row
+    const { error } = await supabase
+      .from('role_permissions')
+      .delete()
+      .eq('role', role)
+      .eq('permission', permission);
+    if (error) throw error;
+  }
+}

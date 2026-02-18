@@ -1,15 +1,28 @@
 'use client';
 
-import { createContext, useContext, ReactNode } from 'react';
-import { useAuth, AuthState } from '@/lib/auth';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useAuth, type AuthState } from '@/lib/auth';
+import { fetchRolePermissions } from '@/lib/supabase';
+import { can as canCheck, DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } from '@/lib/permissions';
+import type { Role, Permission } from '@/lib/permissions';
 import LoginPage from './LoginPage';
 
-const AuthContext = createContext<AuthState>({
+const VIEW_AS_KEY = 'hf_view_as_role';
+
+const defaultAuthState: AuthState = {
   session: null,
   user: null,
   profile: null,
   loading: true,
-});
+  effectiveRole: 'salesperson',
+  viewAsRole: null,
+  setViewAsRole: () => {},
+  can: () => false,
+  permissionsLoaded: false,
+  reloadPermissions: async () => {},
+};
+
+const AuthContext = createContext<AuthState>(defaultAuthState);
 
 export function useAuthContext() {
   return useContext(AuthContext);
@@ -17,6 +30,91 @@ export function useAuthContext() {
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
+
+  // View-as state (admin preview)
+  const [viewAsRole, setViewAsRoleState] = useState<Role | null>(null);
+
+  // DB-loaded permissions map
+  const [permissionMap, setPermissionMap] = useState<Record<Role, Permission[]>>(
+    DEFAULT_ROLE_PERMISSIONS
+  );
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
+
+  // Initialize viewAsRole from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(VIEW_AS_KEY);
+      if (stored && (stored === 'salesperson' || stored === 'field_tech' || stored === 'admin')) {
+        setViewAsRoleState(stored as Role);
+      }
+    } catch {
+      // localStorage not available
+    }
+  }, []);
+
+  const setViewAsRole = useCallback(
+    (role: Role | null) => {
+      // Only admins can use view-as
+      if (auth.profile?.role !== 'admin') return;
+      setViewAsRoleState(role);
+      try {
+        if (role) {
+          localStorage.setItem(VIEW_AS_KEY, role);
+        } else {
+          localStorage.removeItem(VIEW_AS_KEY);
+        }
+      } catch {
+        // localStorage not available
+      }
+    },
+    [auth.profile?.role]
+  );
+
+  // Load permissions from DB
+  const loadPermissions = useCallback(async () => {
+    try {
+      const rows = await fetchRolePermissions();
+      const map: Record<Role, Permission[]> = {
+        salesperson: [],
+        field_tech: [],
+        admin: [...PERMISSIONS], // Admin always gets all
+      };
+      for (const row of rows) {
+        const role = row.role as Role;
+        const perm = row.permission as Permission;
+        if (role !== 'admin' && row.granted && PERMISSIONS.includes(perm)) {
+          map[role].push(perm);
+        }
+      }
+      setPermissionMap(map);
+      setPermissionsLoaded(true);
+    } catch (err) {
+      console.error('Failed to load role permissions:', err);
+      // Fall back to defaults
+      setPermissionMap(DEFAULT_ROLE_PERMISSIONS);
+      setPermissionsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (auth.session) {
+      loadPermissions();
+    }
+  }, [auth.session, loadPermissions]);
+
+  // Compute effective role
+  const effectiveRole: Role =
+    auth.profile?.role === 'admin' && viewAsRole ? viewAsRole : (auth.profile?.role ?? 'salesperson');
+
+  // Permission check using effective role and DB-loaded map
+  const can = useCallback(
+    (permission: Permission): boolean => {
+      // Real admin always has all permissions, even when viewing as another role
+      // But for UI preview purposes, we check against the effective role
+      return canCheck(effectiveRole, permission, permissionMap);
+    },
+    [effectiveRole, permissionMap]
+  );
 
   // Show loading spinner while checking auth
   if (auth.loading) {
@@ -65,8 +163,18 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  const value: AuthState = {
+    ...auth,
+    effectiveRole,
+    viewAsRole,
+    setViewAsRole,
+    can,
+    permissionsLoaded,
+    reloadPermissions: loadPermissions,
+  };
+
   return (
-    <AuthContext.Provider value={auth}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -16,6 +16,7 @@ import {
 } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdf';
 import AppShell from '@/components/AppShell';
+import { useAuthContext } from '@/components/AuthProvider';
 import POList from '@/components/POList';
 import POInput from '@/components/POInput';
 import WindowForm from '@/components/WindowForm';
@@ -31,6 +32,8 @@ function MeasurementsContent() {
   const initialPO = searchParams.get('po');
   const initialEditId = searchParams.get('edit');
   const jobId = searchParams.get('job');
+  const { can } = useAuthContext();
+  const canMeasure = can('measure:submit');
 
   const [currentPO, setCurrentPO] = useState<string | null>(null);
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
@@ -314,7 +317,7 @@ function MeasurementsContent() {
       )}
 
       {/* Measurement form — shown when editing/measuring a window */}
-      {editingWindow && (
+      {editingWindow && canMeasure && (
         <WindowForm
           enabled={currentPO !== null}
           editingWindow={editingWindow}
@@ -334,7 +337,7 @@ function MeasurementsContent() {
       />
 
       {/* Add a Window — below the list, only when not editing */}
-      {currentPO && !editingWindow && (
+      {currentPO && !editingWindow && canMeasure && (
         <div className="mt-6">
           <WindowForm
             enabled={true}
@@ -342,6 +345,13 @@ function MeasurementsContent() {
             onSave={handleSave}
             onCancelEdit={handleCancelEdit}
           />
+        </div>
+      )}
+
+      {/* Read-only notice for users without measure permission */}
+      {currentPO && !canMeasure && (
+        <div className="mt-6 p-4 bg-gray-50 rounded-xl text-center">
+          <p className="text-sm text-gray-500">You have view-only access to measurements. Submitting measurements requires the Field Tech role.</p>
         </div>
       )}
     </>

@@ -21,7 +21,7 @@ import {
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuthContext();
+  const { user, can } = useAuthContext();
   const [job, setJob] = useState<Job | null>(null);
   const [windows, setWindows] = useState<WindowRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -160,7 +160,7 @@ export default function JobDetailPage() {
         </div>
 
         {/* Action Area - depends on status */}
-        {job.status === 'draft' && (
+        {job.status === 'draft' && can('jobs:import') && (
           <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Import Windows</h2>
             <p className="text-sm text-gray-500 mb-4">
@@ -195,23 +195,33 @@ export default function JobDetailPage() {
           </div>
         )}
 
+        {job.status === 'draft' && !can('jobs:import') && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6 text-center">
+            <p className="text-sm text-gray-500">This job is in draft status. A salesperson needs to import windows before measurement can begin.</p>
+          </div>
+        )}
+
         {(job.status === 'windows_imported' || job.status === 'configured') && (
           <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Windows ({windows.length})</h2>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={handleDeleteAllWindows}
-                  className="text-sm text-red-500 hover:text-red-700"
-                >
-                  Delete All
-                </button>
-                <Link
-                  href={`/jobs/${job.id}/import`}
-                  className="text-sm text-primary hover:underline"
-                >
-                  Add more windows
-                </Link>
+                {can('jobs:delete') && (
+                  <button
+                    onClick={handleDeleteAllWindows}
+                    className="text-sm text-red-500 hover:text-red-700"
+                  >
+                    Delete All
+                  </button>
+                )}
+                {can('jobs:import') && (
+                  <Link
+                    href={`/jobs/${job.id}/import`}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Add more windows
+                  </Link>
+                )}
               </div>
             </div>
             <div className="grid gap-2">
@@ -230,15 +240,17 @@ export default function JobDetailPage() {
                       {[w.grid_style, w.screen, w.outside_color].filter(Boolean).join(' / ') || 'No specs configured'}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDeleteWindow(w.id)}
-                    className="p-1.5 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 sm:opacity-100"
-                    title="Delete window"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  {can('jobs:delete') && (
+                    <button
+                      onClick={() => handleDeleteWindow(w.id)}
+                      className="p-1.5 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 sm:opacity-100"
+                      title="Delete window"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                     w.status === 'measured' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                   }`}>
@@ -248,7 +260,7 @@ export default function JobDetailPage() {
               ))}
             </div>
 
-            {windows.length > 0 && (
+            {windows.length > 0 && can('jobs:approve') && (
               <button
                 onClick={handleApprove}
                 className="w-full mt-4 px-4 py-3 bg-primary text-white rounded-xl font-medium text-sm hover:bg-primary-dark transition-colors"
@@ -269,12 +281,16 @@ export default function JobDetailPage() {
               </div>
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Approved for Measurement</h2>
               <p className="text-sm text-gray-500 mb-4">{windows.length} windows ready to be measured</p>
-              <button
-                onClick={handleStartMeasuring}
-                className="px-6 py-3 bg-primary text-white rounded-xl font-medium text-sm hover:bg-primary-dark transition-colors"
-              >
-                Start Measuring
-              </button>
+              {can('measure:start') ? (
+                <button
+                  onClick={handleStartMeasuring}
+                  className="px-6 py-3 bg-primary text-white rounded-xl font-medium text-sm hover:bg-primary-dark transition-colors"
+                >
+                  Start Measuring
+                </button>
+              ) : (
+                <p className="text-sm text-gray-400">Waiting for a field tech to start measuring.</p>
+              )}
             </div>
           </div>
         )}
@@ -285,12 +301,14 @@ export default function JobDetailPage() {
               <h2 className="text-lg font-semibold text-gray-900">
                 Measuring ({measuredCount}/{windows.length})
               </h2>
-              <Link
-                href={`/measurements?job=${job.id}`}
-                className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
-              >
-                Open Measurement Tool
-              </Link>
+              {can('measure:submit') && (
+                <Link
+                  href={`/measurements?job=${job.id}`}
+                  className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
+                >
+                  Open Measurement Tool
+                </Link>
+              )}
             </div>
             {windows.length > 0 && (
               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">

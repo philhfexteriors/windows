@@ -3,22 +3,32 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import type { Role, Permission } from './permissions';
 
 export interface Profile {
   id: string;
   email: string;
   full_name: string | null;
   avatar_url: string | null;
-  role: 'salesperson' | 'field_tech' | 'admin';
+  role: Role;
   created_at: string;
   updated_at: string;
 }
 
-export interface AuthState {
+export interface BaseAuthState {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+}
+
+export interface AuthState extends BaseAuthState {
+  effectiveRole: Role;
+  viewAsRole: Role | null;
+  setViewAsRole: (role: Role | null) => void;
+  can: (permission: Permission) => boolean;
+  permissionsLoaded: boolean;
+  reloadPermissions: () => Promise<void>;
 }
 
 export async function signInWithGoogle() {
@@ -55,7 +65,7 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
   return data as Profile;
 }
 
-export function useAuth(): AuthState {
+export function useAuth(): BaseAuthState {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);

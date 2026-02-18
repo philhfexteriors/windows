@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
+import { useAuthContext } from '@/components/AuthProvider';
 import { fetchJobs, JobWithCounts, JobStatus } from '@/lib/supabase';
 
 const statusLabels: Record<JobStatus, string> = {
@@ -24,6 +25,7 @@ const statusColors: Record<JobStatus, string> = {
 };
 
 export default function JobsPage() {
+  const { can } = useAuthContext();
   const [jobs, setJobs] = useState<JobWithCounts[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<JobStatus | 'all'>('all');
@@ -51,15 +53,17 @@ export default function JobsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Jobs</h1>
           <p className="text-sm text-gray-500 mt-1">Manage window measurement jobs</p>
         </div>
-        <Link
-          href="/jobs/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl font-medium text-sm hover:bg-primary-dark transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New Job
-        </Link>
+        {can('jobs:create') && (
+          <Link
+            href="/jobs/new"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl font-medium text-sm hover:bg-primary-dark transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Job
+          </Link>
+        )}
       </div>
 
       {/* Status Filter */}
@@ -85,12 +89,14 @@ export default function JobsPage() {
       ) : jobs.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-gray-500 mb-4">No jobs found.</p>
-          <Link
-            href="/jobs/new"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
-          >
-            Create your first job
-          </Link>
+          {can('jobs:create') && (
+            <Link
+              href="/jobs/new"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
+            >
+              Create your first job
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid gap-3">

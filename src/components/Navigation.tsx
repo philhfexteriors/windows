@@ -5,28 +5,38 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuthContext } from '@/components/AuthProvider'
 import { signOut } from '@/lib/auth'
+import { ROLE_LABELS } from '@/lib/permissions'
+import type { Role } from '@/lib/permissions'
 
 interface NavItem {
   href: string
   label: string
   icon: string
+  permission?: string
 }
 
 const mainNav: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: '🏠' },
   { href: '/jobs', label: 'Jobs', icon: '📋' },
   { href: '/measurements', label: 'Measure', icon: '📏' },
-  { href: '/upload', label: 'Upload Spreadsheet', icon: '📤' },
+  { href: '/upload', label: 'Upload Spreadsheet', icon: '📤', permission: 'jobs:import' },
 ]
+
+const ROLE_COLORS: Record<Role, string> = {
+  admin: 'bg-purple-100 text-purple-700',
+  salesperson: 'bg-blue-100 text-blue-700',
+  field_tech: 'bg-green-100 text-green-700',
+}
 
 export default function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { user, profile } = useAuthContext()
+  const { user, profile, effectiveRole, viewAsRole, setViewAsRole, can } = useAuthContext()
 
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'
   const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url
   const email = user?.email || ''
+  const isAdmin = profile?.role === 'admin'
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
@@ -39,6 +49,12 @@ export default function Navigation() {
         ? 'bg-primary/10 text-primary'
         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
     }`
+
+  // Filter nav items by permission
+  const visibleNav = mainNav.filter((item) => {
+    if (!item.permission) return true
+    return can(item.permission as Parameters<typeof can>[0])
+  })
 
   const sidebarContent = (
     <>
@@ -57,7 +73,7 @@ export default function Navigation() {
 
       {/* Main Navigation */}
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {mainNav.map((item) => (
+        {visibleNav.map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -68,10 +84,48 @@ export default function Navigation() {
             <span>{item.label}</span>
           </Link>
         ))}
+
+        {/* Admin link */}
+        {can('admin:manage_users') && (
+          <Link
+            href="/admin/users"
+            className={navLinkClasses('/admin')}
+            onClick={() => setMobileOpen(false)}
+          >
+            <span className="text-base">⚙️</span>
+            <span>Admin</span>
+          </Link>
+        )}
       </nav>
 
-      {/* User Info & Sign Out */}
+      {/* User Info & Role */}
       <div className="p-3 border-t border-gray-200">
+        {/* Role badge */}
+        <div className="px-3 mb-2">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[effectiveRole]}`}>
+            {ROLE_LABELS[effectiveRole]}
+            {viewAsRole && ' (preview)'}
+          </span>
+        </div>
+
+        {/* Admin role switcher */}
+        {isAdmin && (
+          <div className="px-3 mb-2">
+            <select
+              value={viewAsRole ?? 'admin'}
+              onChange={(e) => {
+                const val = e.target.value
+                setViewAsRole(val === 'admin' ? null : (val as Role))
+              }}
+              className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="admin">View as: Admin</option>
+              <option value="salesperson">View as: Salesperson</option>
+              <option value="field_tech">View as: Field Tech</option>
+            </select>
+          </div>
+        )}
+
         <div className="flex items-center gap-3 px-3 py-2">
           {avatarUrl ? (
             <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" />
