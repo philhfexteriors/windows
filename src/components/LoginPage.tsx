@@ -1,11 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { signInWithGoogle } from '@/lib/auth';
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+
+  // Show errors from auth callback redirect
+  useEffect(() => {
+    const authError = searchParams.get('error');
+    const message = searchParams.get('message');
+    if (authError) {
+      setError(message ? decodeURIComponent(message) : 'Sign-in failed. Please try again.');
+    }
+  }, [searchParams]);
 
   const handleSignIn = async () => {
     setLoading(true);

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode, Suspense } from 'react';
 import { useAuth, signOut, type AuthState } from '@/lib/auth';
 import { fetchRolePermissions } from '@/lib/supabase';
 import { can as canCheck, DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } from '@/lib/permissions';
@@ -132,7 +132,11 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   // Show login if not authenticated
   if (!auth.session) {
-    return <LoginPage />;
+    return (
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-pulse text-gray-500 text-sm">Loading...</div></div>}>
+        <LoginPage />
+      </Suspense>
+    );
   }
 
   // Validate domain (defense in depth - Google OAuth hd param is the primary check)
