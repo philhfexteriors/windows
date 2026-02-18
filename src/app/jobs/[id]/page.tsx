@@ -49,6 +49,22 @@ export default function JobDetailPage() {
     return () => { channel.unsubscribe(); };
   }, [id, loadData]);
 
+  // Derived counts (computed before early returns so hooks stay consistent)
+  const pendingCount = windows.filter((w) => w.status === 'pending').length;
+  const measuredCount = windows.filter((w) => w.status === 'measured').length;
+  const allMeasured = windows.length > 0 && pendingCount === 0;
+
+  // Auto-complete when all measured
+  useEffect(() => {
+    if (job?.status === 'measuring' && allMeasured && user && !autoCompleting.current) {
+      autoCompleting.current = true;
+      updateJob(job.id, { status: 'complete', completed_at: new Date().toISOString() })
+        .then(() => addJobActivity(job.id, user.id, 'completed'))
+        .then(loadData)
+        .finally(() => { autoCompleting.current = false; });
+    }
+  }, [job?.status, allMeasured, user, job?.id, loadData]);
+
   const handleApprove = async () => {
     if (!job || !user) return;
     try {
@@ -116,21 +132,6 @@ export default function JobDetailPage() {
       </AppShell>
     );
   }
-
-  const pendingCount = windows.filter((w) => w.status === 'pending').length;
-  const measuredCount = windows.filter((w) => w.status === 'measured').length;
-  const allMeasured = windows.length > 0 && pendingCount === 0;
-
-  // Auto-complete when all measured
-  useEffect(() => {
-    if (job?.status === 'measuring' && allMeasured && user && !autoCompleting.current) {
-      autoCompleting.current = true;
-      updateJob(job.id, { status: 'complete', completed_at: new Date().toISOString() })
-        .then(() => addJobActivity(job.id, user.id, 'completed'))
-        .then(loadData)
-        .finally(() => { autoCompleting.current = false; });
-    }
-  }, [job?.status, allMeasured, user, job?.id, loadData]);
 
   return (
     <AppShell>
