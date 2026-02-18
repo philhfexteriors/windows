@@ -6,11 +6,13 @@ import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import JobStatusBar from '@/components/JobStatusBar';
 import ExportPanel from '@/components/ExportPanel';
+import WindowEditDrawer from '@/components/WindowEditDrawer';
 import { useAuthContext } from '@/components/AuthProvider';
 import {
   fetchJob,
   fetchWindowsByJobId,
   updateJob,
+  updateWindow,
   addJobActivity,
   subscribeToJob,
   removeWindow,
@@ -26,6 +28,7 @@ export default function JobDetailPage() {
   const [windows, setWindows] = useState<WindowRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingWindow, setEditingWindow] = useState<WindowRow | null>(null);
   const autoCompleting = useRef(false);
 
   const loadData = useCallback(async () => {
@@ -99,6 +102,11 @@ export default function JobDetailPage() {
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete window');
     }
+  };
+
+  const handleEditSave = async (windowId: string, data: Partial<WindowRow>) => {
+    await updateWindow(windowId, data);
+    loadData();
   };
 
   const handleDeleteAllWindows = async () => {
@@ -232,36 +240,60 @@ export default function JobDetailPage() {
             </div>
             <div className="grid gap-2">
               {windows.map((w) => (
-                <div key={w.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg group">
-                  <div className="w-10 h-10 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-xs font-mono text-gray-600">
-                    {w.label || '?'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">
-                      {w.approx_width && w.approx_height
-                        ? `${w.approx_width} x ${w.approx_height}`
-                        : 'No dimensions'}
+                <div key={w.id} className="p-3 bg-gray-50 rounded-lg">
+                  {/* Row 1: label, dimensions, type, status */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-xs font-mono text-gray-600 shrink-0">
+                      {w.label || '?'}
                     </div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {[w.grid_style, w.screen, w.outside_color].filter(Boolean).join(' / ') || 'No specs configured'}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900">
+                        {w.approx_width && w.approx_height
+                          ? `${w.approx_width} x ${w.approx_height}`
+                          : 'No dimensions'}
+                      </div>
+                      {w.type && <div className="text-xs text-gray-500">{w.type}</div>}
                     </div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
+                      w.status === 'measured' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {w.status}
+                    </span>
                   </div>
-                  {can('jobs:delete') && (
-                    <button
-                      onClick={() => handleDeleteWindow(w.id)}
-                      className="p-1.5 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 sm:opacity-100"
-                      title="Delete window"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+
+                  {/* Row 2: labeled specs */}
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 pl-13">
+                    {w.grid_style && <span><span className="font-medium text-gray-600">Grid:</span> {w.grid_style}</span>}
+                    {w.temper && <span><span className="font-medium text-gray-600">Temper:</span> {w.temper}</span>}
+                    {w.screen && <span><span className="font-medium text-gray-600">Screen:</span> {w.screen}</span>}
+                    {w.outside_color && <span><span className="font-medium text-gray-600">Ext:</span> {w.outside_color}</span>}
+                    {w.inside_color && <span><span className="font-medium text-gray-600">Int:</span> {w.inside_color}</span>}
+                    {!w.grid_style && !w.temper && !w.screen && !w.outside_color && !w.inside_color && (
+                      <span className="italic">No specs configured</span>
+                    )}
+                  </div>
+
+                  {/* Row 3: action buttons */}
+                  {(can('jobs:import') || can('jobs:delete')) && (
+                    <div className="mt-2 flex items-center gap-3 pl-13">
+                      {can('jobs:import') && (
+                        <button
+                          onClick={() => setEditingWindow(w)}
+                          className="text-xs text-primary hover:text-primary-dark font-medium"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {can('jobs:delete') && (
+                        <button
+                          onClick={() => handleDeleteWindow(w.id)}
+                          className="text-xs text-red-500 hover:text-red-700 font-medium"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
                   )}
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                    w.status === 'measured' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {w.status}
-                  </span>
                 </div>
               ))}
             </div>
@@ -348,6 +380,12 @@ export default function JobDetailPage() {
           </div>
         )}
       </div>
+
+      <WindowEditDrawer
+        window={editingWindow}
+        onClose={() => setEditingWindow(null)}
+        onSave={handleEditSave}
+      />
     </AppShell>
   );
 }
