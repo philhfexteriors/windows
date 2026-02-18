@@ -55,22 +55,27 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const loadDashboard = async () => {
-      setLoading(true);
       try {
         const [statsData, jobsData] = await Promise.all([
           fetchJobStats(dateRange),
           fetchJobs(),
         ]);
-        setJobStats(statsData);
-        setJobs(jobsData);
+        if (!cancelled) {
+          setJobStats(statsData);
+          setJobs(jobsData);
+        }
       } catch (err) {
-        console.error('Failed to load dashboard:', err);
+        if (!cancelled) console.error('Failed to load dashboard:', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     loadDashboard();
+    // Safety timeout — never show spinner forever
+    const timeout = setTimeout(() => { if (!cancelled) setLoading(false); }, 5000);
+    return () => { cancelled = true; clearTimeout(timeout); };
   }, [dateRange]);
 
   const handleDateRangeChange = (range: DateRange) => {
