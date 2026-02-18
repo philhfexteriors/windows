@@ -10,6 +10,69 @@ import {
 } from '@/lib/supabase';
 import { useAuthContext } from '@/components/AuthProvider';
 
+const MAX_DIMENSION = 1920;
+const JPEG_QUALITY = 0.8;
+const MAX_FILE_SIZE = 1024 * 1024; // 1MB — compress anything larger
+
+function compressImage(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    // Skip non-image or already-small files
+    if (!file.type.startsWith('image/') || file.size <= MAX_FILE_SIZE) {
+      resolve(file);
+      return;
+    }
+
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      let { width, height } = img;
+
+      // Scale down if either dimension exceeds max
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(file); // fallback to original
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+          const compressed = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
+            type: 'image/jpeg',
+            lastModified: file.lastModified,
+          });
+          resolve(compressed);
+        },
+        'image/jpeg',
+        JPEG_QUALITY,
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image for compression'));
+    };
+
+    img.src = url;
+  });
+}
+
 interface Props {
   windowId: string;
   jobId: string;
@@ -59,10 +122,13 @@ export default function PhotoCapture({ windowId, jobId, companycamProjectId }: P
           await updateWindowPhotoCompanyCamId(photo.id, String(data.data.id));
         }
       } else {
-        console.error('Failed to push photo to CompanyCam');
+        const errData = await res.json().catch(() => null);
+        console.error('Failed to push photo to CompanyCam:', errData);
+        setError('Photo saved but failed to sync to CompanyCam');
       }
     } catch (err) {
       console.error('CompanyCam push error:', err);
+      setError('Photo saved but failed to sync to CompanyCam');
     }
   };
 
@@ -77,7 +143,10 @@ export default function PhotoCapture({ windowId, jobId, companycamProjectId }: P
     setError(null);
 
     try {
-      const photo = await uploadWindowPhoto(windowId, jobId, file, user.id);
+      // Compress large images before upload to prevent "Load failed" on mobile
+      const compressed = await compressImage(file);
+
+      const photo = await uploadWindowPhoto(windowId, jobId, compressed, user.id);
 
       // Push to CompanyCam if linked
       if (companycamProjectId) {
@@ -87,7 +156,12 @@ export default function PhotoCapture({ windowId, jobId, companycamProjectId }: P
       await loadPhotos();
     } catch (err) {
       console.error('Upload error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to upload photo');
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.toLowerCase().includes('load failed') || message.toLowerCase().includes('failed to fetch')) {
+        setError('Upload failed — photo may be too large. Please try again.');
+      } else {
+        setError(message || 'Failed to upload photo');
+      }
     } finally {
       setUploading(false);
     }
