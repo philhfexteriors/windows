@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { useAuth, type AuthState } from '@/lib/auth';
+import { useAuth, signOut, type AuthState } from '@/lib/auth';
 import { fetchRolePermissions } from '@/lib/supabase';
 import { can as canCheck, DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } from '@/lib/permissions';
 import type { Role, Permission } from '@/lib/permissions';
@@ -151,9 +151,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
             This app is only available to @hfexteriors.com accounts. Please sign in with your HF Exteriors email.
           </p>
           <button
-            onClick={() => {
-              import('@/lib/auth').then(({ signOut }) => signOut());
-            }}
+            onClick={() => signOut()}
             className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
           >
             Sign Out

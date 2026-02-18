@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getHoverAccessToken, HOVER_API_BASE } from '@/lib/hover-auth';
+import { getAuthenticatedUser } from '@/lib/supabase-server';
 
 // Proxy to fetch measurement JSON from a Hover artifact URL
 // This keeps the Hover OAuth tokens server-side
 export async function GET(request: NextRequest) {
+  const userId = await getAuthenticatedUser();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const token = await getHoverAccessToken();
   if (!token) {
     return NextResponse.json(

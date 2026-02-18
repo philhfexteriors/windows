@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getHoverAccessToken, HOVER_API_BASE } from '@/lib/hover-auth';
+import { getAuthenticatedUser } from '@/lib/supabase-server';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const userId = await getAuthenticatedUser();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const token = await getHoverAccessToken();
   if (!token) {
     return NextResponse.json(

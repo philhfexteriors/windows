@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
-import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { getSupabaseAdmin, getAuthenticatedUser } from '@/lib/supabase-server';
 import { formatFraction } from '@/lib/measurements';
 
 export async function POST(request: NextRequest) {
+  const authUserId = await getAuthenticatedUser();
+  if (!authUserId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
 
@@ -82,12 +87,7 @@ export async function POST(request: NextRequest) {
     } catch (authErr) {
       console.error('Google auth failed:', authErr);
       return NextResponse.json(
-        {
-          error: 'Google authentication failed',
-          detail: authErr instanceof Error ? authErr.message : String(authErr),
-          impersonating: impersonateEmail,
-          serviceEmail,
-        },
+        { error: 'Google authentication failed. Please contact an administrator.' },
         { status: 500 }
       );
     }
@@ -114,18 +114,8 @@ export async function POST(request: NextRequest) {
 
     } catch (createErr) {
       console.error('Spreadsheet create failed:', createErr);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const gErr = createErr as any;
-      const responseData = gErr?.response?.data;
-      const errorDetails = responseData?.error;
       return NextResponse.json(
-        {
-          error: 'Failed to create spreadsheet',
-          detail: gErr?.message || String(createErr),
-          googleError: errorDetails || null,
-          httpStatus: gErr?.response?.status || gErr?.code || null,
-          responseBody: responseData || null,
-        },
+        { error: 'Failed to create spreadsheet' },
         { status: 500 }
       );
     }
@@ -264,13 +254,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: sheetUrl, spreadsheetId });
   } catch (err) {
     console.error('Google Sheets export error:', err);
-    const message = err instanceof Error ? err.message : 'Failed to create Google Sheet';
-    // Include more detail from Google API errors
-    const detail = (err as Record<string, unknown>)?.response
-      ? JSON.stringify((err as Record<string, unknown>).response)
-      : undefined;
     return NextResponse.json(
-      { error: message, detail },
+      { error: 'Failed to create Google Sheet' },
       { status: 500 }
     );
   }

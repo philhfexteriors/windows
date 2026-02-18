@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
@@ -119,13 +119,18 @@ export default function JobDetailPage() {
   const pendingCount = windows.filter((w) => w.status === 'pending').length;
   const measuredCount = windows.filter((w) => w.status === 'measured').length;
   const allMeasured = windows.length > 0 && pendingCount === 0;
+  const autoCompleting = useRef(false);
 
   // Auto-complete when all measured
-  if (job.status === 'measuring' && allMeasured && user) {
-    updateJob(job.id, { status: 'complete', completed_at: new Date().toISOString() })
-      .then(() => addJobActivity(job.id, user.id, 'completed'))
-      .then(loadData);
-  }
+  useEffect(() => {
+    if (job?.status === 'measuring' && allMeasured && user && !autoCompleting.current) {
+      autoCompleting.current = true;
+      updateJob(job.id, { status: 'complete', completed_at: new Date().toISOString() })
+        .then(() => addJobActivity(job.id, user.id, 'completed'))
+        .then(loadData)
+        .finally(() => { autoCompleting.current = false; });
+    }
+  }, [job?.status, allMeasured, user, job?.id, loadData]);
 
   return (
     <AppShell>

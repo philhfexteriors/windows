@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthenticatedUser } from '@/lib/supabase-server';
 
 const CC_API_BASE = process.env.CC_API_BASE_URL || 'https://classic-api.contractorscloud.com/api/v1';
 const CC_API_KEY = process.env.CC_API_KEY;
@@ -7,6 +8,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const userId = await getAuthenticatedUser();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   if (!CC_API_KEY) {
     return NextResponse.json(
       { error: 'Contractors Cloud API not configured' },
