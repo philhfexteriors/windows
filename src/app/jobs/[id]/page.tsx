@@ -7,6 +7,7 @@ import AppShell from '@/components/AppShell';
 import JobStatusBar from '@/components/JobStatusBar';
 import ExportPanel from '@/components/ExportPanel';
 import WindowEditDrawer from '@/components/WindowEditDrawer';
+import CompanyCamProjectSearch, { CompanyCamProject } from '@/components/CompanyCamProjectSearch';
 import { useAuthContext } from '@/components/AuthProvider';
 import {
   fetchJob,
@@ -29,6 +30,7 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingWindow, setEditingWindow] = useState<WindowRow | null>(null);
+  const [showCompanyCamSearch, setShowCompanyCamSearch] = useState(false);
   const autoCompleting = useRef(false);
 
   const loadData = useCallback(async () => {
@@ -109,6 +111,34 @@ export default function JobDetailPage() {
     loadData();
   };
 
+  const handleCompanyCamLink = async (project: CompanyCamProject) => {
+    if (!job || !user) return;
+    try {
+      await updateJob(job.id, { companycam_project_id: String(project.id) });
+      if (user) {
+        await addJobActivity(job.id, user.id, 'companycam_linked', {
+          companycam_project_id: project.id,
+          companycam_project_name: project.name,
+        });
+      }
+      setShowCompanyCamSearch(false);
+      loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to link CompanyCam project');
+    }
+  };
+
+  const handleCompanyCamUnlink = async () => {
+    if (!job || !user) return;
+    try {
+      await updateJob(job.id, { companycam_project_id: null });
+      setShowCompanyCamSearch(false);
+      loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to unlink CompanyCam project');
+    }
+  };
+
   const handleDeleteAllWindows = async () => {
     if (!job || !user) return;
     if (!confirm(`Delete all ${windows.length} windows from this job? This cannot be undone.`)) return;
@@ -171,6 +201,61 @@ export default function JobDetailPage() {
           </div>
 
           <JobStatusBar status={job.status} />
+
+          {/* CompanyCam Project Link */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            {job.companycam_project_id && !showCompanyCamSearch ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-green-700">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
+                  </svg>
+                  CompanyCam linked
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowCompanyCamSearch(true)}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Change
+                  </button>
+                  <button
+                    onClick={handleCompanyCamUnlink}
+                    className="text-xs text-red-500 hover:text-red-700"
+                  >
+                    Unlink
+                  </button>
+                </div>
+              </div>
+            ) : showCompanyCamSearch ? (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">Link CompanyCam Project</span>
+                  <button
+                    onClick={() => setShowCompanyCamSearch(false)}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <CompanyCamProjectSearch
+                  onSelect={handleCompanyCamLink}
+                  jobAddress={job.client_address || undefined}
+                />
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCompanyCamSearch(true)}
+                className="flex items-center gap-2 text-sm text-green-600 hover:text-green-700 font-medium"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Link CompanyCam Project
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Action Area - depends on status */}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import type { WindowRow } from '@/lib/supabase';
+import PhotoCapture from './PhotoCapture';
 import {
   WINDOW_TYPES,
   SIMPLE_TYPES,
@@ -32,6 +33,8 @@ interface WindowFormProps {
     data: Partial<Omit<WindowRow, 'id' | 'po_number' | 'created_at' | 'updated_at'>>
   ) => Promise<void>;
   onCancelEdit: () => void;
+  jobId?: string | null;
+  companycamProjectId?: string | null;
 }
 
 export default function WindowForm({
@@ -39,6 +42,8 @@ export default function WindowForm({
   editingWindow,
   onSave,
   onCancelEdit,
+  jobId,
+  companycamProjectId,
 }: WindowFormProps) {
   const [location, setLocation] = useState('');
   const [type, setType] = useState('');
@@ -661,6 +666,15 @@ export default function WindowForm({
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Photo capture — only when editing an existing window */}
+          {isEditing && editingWindow && jobId && (
+            <PhotoCapture
+              windowId={editingWindow.id}
+              jobId={jobId}
+              companycamProjectId={companycamProjectId}
+            />
           )}
 
           {/* Final size display */}

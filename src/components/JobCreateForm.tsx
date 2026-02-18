@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthContext } from '@/components/AuthProvider';
 import { createJob, addJobActivity, getNextPONumber } from '@/lib/supabase';
 import CCProjectSearch, { CCProject } from './CCProjectSearch';
+import CompanyCamProjectSearch, { CompanyCamProject } from './CompanyCamProjectSearch';
 
 export default function JobCreateForm() {
   const router = useRouter();
@@ -17,6 +18,8 @@ export default function JobCreateForm() {
   const [clientZip, setClientZip] = useState('');
   const [ccProjectId, setCcProjectId] = useState<string | null>(null);
   const [ccProjectNumber, setCcProjectNumber] = useState<string | null>(null);
+  const [companycamProjectId, setCompanycamProjectId] = useState<string | null>(null);
+  const [selectedCompanyCam, setSelectedCompanyCam] = useState<CompanyCamProject | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCC, setSelectedCC] = useState<CCProject | null>(null);
@@ -31,6 +34,11 @@ export default function JobCreateForm() {
     setClientCity(project.address_city || '');
     setClientState(project.address_state || '');
     setClientZip(project.address_zip || '');
+  };
+
+  const handleCompanyCamSelect = (project: CompanyCamProject) => {
+    setSelectedCompanyCam(project);
+    setCompanycamProjectId(String(project.id));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,6 +60,7 @@ export default function JobCreateForm() {
         client_zip: clientZip || null,
         cc_project_id: ccProjectId,
         cc_project_number: ccProjectNumber,
+        companycam_project_id: companycamProjectId,
         status: 'draft',
         notes: '',
       });
@@ -87,6 +96,34 @@ export default function JobCreateForm() {
                 setCcProjectNumber(null);
               }}
               className="ml-auto text-blue-500 hover:text-blue-700"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* CompanyCam Section */}
+      <div className="bg-green-50 rounded-xl p-4">
+        <h3 className="text-sm font-medium text-green-900 mb-3">Link CompanyCam Project</h3>
+        {!selectedCompanyCam ? (
+          <CompanyCamProjectSearch
+            onSelect={handleCompanyCamSelect}
+            jobAddress={clientAddress || undefined}
+          />
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-green-700 bg-green-100 rounded-lg px-3 py-2">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            CompanyCam: {selectedCompanyCam.name}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCompanyCam(null);
+                setCompanycamProjectId(null);
+              }}
+              className="ml-auto text-green-500 hover:text-green-700"
             >
               Clear
             </button>

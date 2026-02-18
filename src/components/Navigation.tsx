@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuthContext } from '@/components/AuthProvider'
+import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { signOut } from '@/lib/auth'
 import { ROLE_LABELS } from '@/lib/permissions'
 import type { Role } from '@/lib/permissions'
@@ -32,6 +33,7 @@ export default function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const { user, profile, effectiveRole, viewAsRole, setViewAsRole, can } = useAuthContext()
+  const { isOnline, pendingCount } = useOnlineStatus()
 
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'
   const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url
@@ -80,8 +82,18 @@ export default function Navigation() {
             className={navLinkClasses(item.href)}
             onClick={() => setMobileOpen(false)}
           >
-            <span className="text-base">{item.icon}</span>
-            <span>{item.label}</span>
+            <span className="text-base relative">
+              {item.icon}
+              {item.href === '/measurements' && !isOnline && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full" />
+              )}
+            </span>
+            <span className="flex-1">{item.label}</span>
+            {item.href === '/measurements' && pendingCount > 0 && (
+              <span className="ml-auto bg-amber-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center font-medium">
+                {pendingCount}
+              </span>
+            )}
           </Link>
         ))}
 

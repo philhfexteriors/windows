@@ -10,12 +10,19 @@ import {
   fetchJob,
   subscribeToWindows,
   addWindow,
-  updateWindow,
+  saveMeasurementWithHistory,
   removeWindow,
   type WindowRow,
   type Job,
 } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdf';
+import {
+  queueMeasurement,
+  cacheWindowsForOffline,
+  getCachedWindows,
+  getCachedWindowsByJobId,
+} from '@/lib/offline-queue';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import AppShell from '@/components/AppShell';
 import { useAuthContext } from '@/components/AuthProvider';
 import POList from '@/components/POList';
@@ -33,7 +40,8 @@ function MeasurementsContent() {
   const initialPO = searchParams.get('po');
   const initialEditId = searchParams.get('edit');
   const jobId = searchParams.get('job');
-  const { can } = useAuthContext();
+  const { user, can } = useAuthContext();
+  const { isOnline, refreshPendingCount } = useOnlineStatus();
   const canMeasure = can('measure:submit');
 
   const [currentPO, setCurrentPO] = useState<string | null>(null);
@@ -61,13 +69,29 @@ function MeasurementsContent() {
   }, []);
 
   const refreshWindows = useCallback(
-    async (po: string) => {
+    async (po: string, jId?: string | null) => {
       try {
         const data = await fetchWindows(po);
         setWindows(data);
+        // Cache for offline use
+        cacheWindowsForOffline(data, po, jId ?? null).catch(() => {});
         return data;
       } catch (err) {
         console.error('Failed to fetch windows:', err);
+        // Fall back to cached windows when offline
+        if (!navigator.onLine) {
+          try {
+            const cached = jId
+              ? await getCachedWindowsByJobId(jId)
+              : await getCachedWindows(po);
+            if (cached.length > 0) {
+              setWindows(cached);
+              return cached;
+            }
+          } catch {
+            // IndexedDB not available
+          }
+        }
         return [];
       }
     },
@@ -124,6 +148,8 @@ function MeasurementsContent() {
           setCurrentJob(job);
           setCurrentPO(job.po_number);
           setWindows(jobWindows);
+          // Cache for offline
+          cacheWindowsForOffline(jobWindows, job.po_number, job.id).catch(() => {});
           showStatus(`Loaded job: ${job.po_number}. Found ${jobWindows.length} window(s).`, false);
 
           channelRef.current = subscribeToWindows(job.po_number, () => {
@@ -164,25 +190,80 @@ function MeasurementsContent() {
         Omit<WindowRow, 'id' | 'po_number' | 'created_at' | 'updated_at'>
       >
     ) => {
-      if (!currentPO) return;
+      if (!currentPO || !user) return;
+
+      // Offline handling for editing existing windows
+      if (!isOnline && editingWindow) {
+        try {
+          await queueMeasurement(editingWindow.id, editingWindow, data, user.id);
+          // Optimistically update local state
+          setWindows((prev) =>
+            prev.map((w) =>
+              w.id === editingWindow.id
+                ? { ...w, ...data, status: 'measured' as const }
+                : w
+            )
+          );
+          showStatus('Measurement saved offline. Will sync when back online.', false);
+          setEditingWindow(null);
+          await refreshPendingCount();
+          return;
+        } catch (err) {
+          console.error('Failed to queue offline:', err);
+          showStatus('Failed to save offline. Please try again.');
+          throw err;
+        }
+      }
+
+      // Offline — can't create new windows without server
+      if (!isOnline && !editingWindow) {
+        showStatus('Cannot add new windows while offline.');
+        return;
+      }
 
       try {
         if (editingWindow) {
-          await updateWindow(editingWindow.id, data);
+          await saveMeasurementWithHistory(
+            editingWindow.id,
+            editingWindow,
+            data,
+            user.id
+          );
           showStatus('Window updated successfully!', false);
           setEditingWindow(null);
         } else {
-          await addWindow(currentPO, data);
+          await addWindow(currentPO, { ...data, measured_by: user.id });
           showStatus('Window saved successfully!', false);
         }
-        await refreshWindows(currentPO);
+        await refreshWindows(currentPO, currentJob?.id);
       } catch (err) {
         console.error('Error saving window:', err);
+
+        // Try to queue offline if save fails and we're editing
+        if (editingWindow) {
+          try {
+            await queueMeasurement(editingWindow.id, editingWindow, data, user.id);
+            setWindows((prev) =>
+              prev.map((w) =>
+                w.id === editingWindow.id
+                  ? { ...w, ...data, status: 'measured' as const }
+                  : w
+              )
+            );
+            showStatus('Connection lost — measurement saved offline.', false);
+            setEditingWindow(null);
+            await refreshPendingCount();
+            return;
+          } catch {
+            // Queue failed too
+          }
+        }
+
         showStatus('Failed to save window. Check connection.');
         throw err;
       }
     },
-    [currentPO, editingWindow, showStatus, refreshWindows]
+    [currentPO, currentJob?.id, editingWindow, isOnline, showStatus, refreshWindows, refreshPendingCount, user]
   );
 
   const handleMeasure = useCallback(
@@ -360,6 +441,8 @@ function MeasurementsContent() {
           editingWindow={editingWindow}
           onSave={handleSave}
           onCancelEdit={handleCancelEdit}
+          jobId={currentJob?.id}
+          companycamProjectId={currentJob?.companycam_project_id}
         />
       )}
 
@@ -381,6 +464,8 @@ function MeasurementsContent() {
             editingWindow={null}
             onSave={handleSave}
             onCancelEdit={handleCancelEdit}
+            jobId={currentJob?.id}
+            companycamProjectId={currentJob?.companycam_project_id}
           />
         </div>
       )}

@@ -24,6 +24,7 @@ export interface Job {
   client_zip: string | null;
   cc_project_id: string | null;
   cc_project_number: string | null;
+  companycam_project_id: string | null;
   hover_job_id: number | null;
   hover_model_ids: { id: number; name: string; state: string }[] | null;
   status: JobStatus;
@@ -68,6 +69,7 @@ export interface WindowRow {
   hover_label: string | null;
   hover_group: string | null;
   custom_specs: Record<string, string>;
+  measured_by: string | null;
   notes: string;
   status: 'pending' | 'measured';
   created_at: string;
@@ -445,6 +447,7 @@ export async function createJob(
       client_zip: data.client_zip || null,
       cc_project_id: data.cc_project_id || null,
       cc_project_number: data.cc_project_number || null,
+      companycam_project_id: data.companycam_project_id || null,
       hover_job_id: data.hover_job_id || null,
       hover_model_ids: data.hover_model_ids || null,
       status: data.status || 'draft',
@@ -592,6 +595,71 @@ export async function deleteWindowSpecField(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// ===== MEASUREMENT HISTORY =====
+
+export interface MeasurementHistoryRow {
+  id: string;
+  window_id: string;
+  measured_by: string | null;
+  widths: number[];
+  heights: number[];
+  final_w: number | null;
+  final_h: number | null;
+  transom_shape: string | null;
+  transom_height: number | null;
+  notes: string;
+  created_at: string;
+  profile?: { full_name: string | null; email: string } | null;
+}
+
+export async function fetchMeasurementHistory(
+  windowId: string
+): Promise<MeasurementHistoryRow[]> {
+  const { data, error } = await supabase
+    .from('measurement_history')
+    .select('*, profile:profiles!measured_by(full_name, email)')
+    .eq('window_id', windowId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as MeasurementHistoryRow[];
+}
+
+export async function saveMeasurementWithHistory(
+  windowId: string,
+  currentWindow: WindowRow,
+  newData: Partial<Omit<WindowRow, 'id' | 'po_number' | 'created_at'>>,
+  userId: string
+): Promise<WindowRow> {
+  // Step 1: If the window already has measurements, save old values to history
+  if (currentWindow.final_w !== null) {
+    const { error: historyError } = await supabase
+      .from('measurement_history')
+      .insert({
+        window_id: windowId,
+        measured_by: currentWindow.measured_by || null,
+        widths: currentWindow.widths || [],
+        heights: currentWindow.heights || [],
+        final_w: currentWindow.final_w,
+        final_h: currentWindow.final_h,
+        transom_shape: currentWindow.transom_shape || null,
+        transom_height: currentWindow.transom_height || null,
+        notes: currentWindow.notes || '',
+      });
+
+    if (historyError) {
+      console.error('Failed to save measurement history:', historyError);
+      // Don't block the update if history save fails
+    }
+  }
+
+  // Step 2: Update the window with new values + measured_by
+  return updateWindow(windowId, {
+    ...newData,
+    measured_by: userId,
+  });
+}
+
 // ===== ADMIN / RBAC FUNCTIONS =====
 
 export interface RolePermissionRow {
@@ -657,4 +725,124 @@ export async function upsertRolePermission(
       .eq('permission', permission);
     if (error) throw error;
   }
+}
+
+// ===== WINDOW PHOTOS =====
+
+export interface WindowPhoto {
+  id: string;
+  window_id: string;
+  job_id: string;
+  storage_path: string;
+  public_url: string;
+  companycam_photo_id: string | null;
+  description: string;
+  captured_at: string;
+  uploaded_by: string;
+  created_at: string;
+}
+
+export async function fetchWindowPhotos(windowId: string): Promise<WindowPhoto[]> {
+  const { data, error } = await supabase
+    .from('window_photos')
+    .select('*')
+    .eq('window_id', windowId)
+    .order('captured_at', { ascending: false });
+
+  if (error) throw error;
+  return data as WindowPhoto[];
+}
+
+export async function fetchJobPhotos(jobId: string): Promise<WindowPhoto[]> {
+  const { data, error } = await supabase
+    .from('window_photos')
+    .select('*')
+    .eq('job_id', jobId)
+    .order('captured_at', { ascending: false });
+
+  if (error) throw error;
+  return data as WindowPhoto[];
+}
+
+export async function uploadWindowPhoto(
+  windowId: string,
+  jobId: string,
+  file: File,
+  userId: string,
+  description?: string
+): Promise<WindowPhoto> {
+  const timestamp = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const storagePath = `${jobId}/${windowId}/${timestamp}-${safeName}`;
+
+  // Upload to Supabase Storage
+  const { error: uploadError } = await supabase.storage
+    .from('window-photos')
+    .upload(storagePath, file, {
+      contentType: file.type,
+      upsert: false,
+    });
+
+  if (uploadError) throw uploadError;
+
+  // Get public URL
+  const { data: urlData } = supabase.storage
+    .from('window-photos')
+    .getPublicUrl(storagePath);
+
+  const publicUrl = urlData.publicUrl;
+
+  // Insert into window_photos table
+  const { data, error } = await supabase
+    .from('window_photos')
+    .insert({
+      window_id: windowId,
+      job_id: jobId,
+      storage_path: storagePath,
+      public_url: publicUrl,
+      description: description || '',
+      captured_at: new Date().toISOString(),
+      uploaded_by: userId,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as WindowPhoto;
+}
+
+export async function deleteWindowPhoto(photoId: string): Promise<void> {
+  // First get the photo to find the storage path
+  const { data: photo, error: fetchError } = await supabase
+    .from('window_photos')
+    .select('storage_path')
+    .eq('id', photoId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  // Delete from storage
+  if (photo?.storage_path) {
+    await supabase.storage.from('window-photos').remove([photo.storage_path]);
+  }
+
+  // Delete from table
+  const { error } = await supabase
+    .from('window_photos')
+    .delete()
+    .eq('id', photoId);
+
+  if (error) throw error;
+}
+
+export async function updateWindowPhotoCompanyCamId(
+  photoId: string,
+  companycamPhotoId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('window_photos')
+    .update({ companycam_photo_id: companycamPhotoId })
+    .eq('id', photoId);
+
+  if (error) throw error;
 }

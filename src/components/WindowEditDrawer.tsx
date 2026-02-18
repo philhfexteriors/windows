@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Drawer from './Drawer';
+import MeasurementHistory from './MeasurementHistory';
 import { WINDOW_TYPES, GRID_STYLES, TEMPER_OPTIONS, SCREEN_OPTIONS } from '@/lib/measurements';
 import { fetchWindowSpecFields, type WindowSpecField } from '@/lib/supabase';
 import type { WindowRow } from '@/lib/supabase';
@@ -31,6 +32,7 @@ export default function WindowEditDrawer({ window: win, onClose, onSave }: Windo
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Dynamic spec fields from DB
   const [specFields, setSpecFields] = useState<WindowSpecField[]>([]);
@@ -230,6 +232,32 @@ export default function WindowEditDrawer({ window: win, onClose, onSave }: Windo
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
           </div>
+
+          {/* Measurement History */}
+          {win.status === 'measured' && (
+            <div className="border-t border-gray-200 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowHistory(!showHistory)}
+                className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 w-full"
+              >
+                <svg
+                  className={`w-4 h-4 transition-transform ${showHistory ? 'rotate-90' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                Measurement History
+              </button>
+              {showHistory && (
+                <div className="mt-3">
+                  <MeasurementHistory windowId={win.id} currentWindow={win} />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Error message */}
           {error && (
