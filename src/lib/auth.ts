@@ -36,18 +36,17 @@ export async function signInWithGoogle() {
     provider: 'google',
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
-      skipBrowserRedirect: true, // Get the URL instead of auto-redirecting (fixes mobile/PWA)
+      skipBrowserRedirect: true,
       queryParams: {
-        hd: 'hfexteriors.com', // Restrict to HF Exteriors Google Workspace domain
+        hd: 'hfexteriors.com',
       },
     },
   });
   if (error) throw error;
   if (data?.url) {
-    // Manually redirect — bypasses service worker and mobile browser quirks
-    window.location.href = data.url;
+    window.location.assign(data.url);
   } else {
-    throw new Error('No OAuth URL returned from Supabase');
+    throw new Error('Sign-in failed — no redirect URL received.');
   }
 }
 

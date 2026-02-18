@@ -16,12 +16,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Windows — H&F Exteriors",
   description: "Window measurement tracking for H&F Exteriors",
-  manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "H&F Windows",
-  },
 };
 
 export const viewport: Viewport = {
@@ -36,7 +30,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="apple-touch-icon" href="/icon-192.svg" />
+        <script dangerouslySetInnerHTML={{ __html: `
+          if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(reg){reg.unregister()})});}
+        `}} />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
