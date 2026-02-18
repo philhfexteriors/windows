@@ -73,24 +73,25 @@ export function useAuth(): BaseAuthState {
   const loadProfile = useCallback(async (userId: string) => {
     const p = await fetchProfile(userId);
     setProfile(p);
+    return p;
   }, []);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    // Get initial session — await profile before clearing loading state
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s);
       if (s?.user) {
-        loadProfile(s.user.id);
+        await loadProfile(s.user.id);
       }
       setLoading(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, s) => {
+      async (_event, s) => {
         setSession(s);
         if (s?.user) {
-          loadProfile(s.user.id);
+          await loadProfile(s.user.id);
         } else {
           setProfile(null);
         }
