@@ -18,7 +18,7 @@ interface NavItem {
 const mainNav: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: '🏠' },
   { href: '/jobs', label: 'Jobs', icon: '📋' },
-  { href: '/measurements', label: 'Measure', icon: '📏' },
+  { href: '/measurements', label: 'Measure', icon: '📏', permission: 'measure:submit' },
   { href: '/upload', label: 'Upload Spreadsheet', icon: '📤', permission: 'jobs:import' },
 ]
 
