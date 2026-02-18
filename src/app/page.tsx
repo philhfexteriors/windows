@@ -27,7 +27,7 @@ const statusLabels: Record<string, string> = {
   draft: 'Draft',
   windows_imported: 'Imported',
   configured: 'Configured',
-  approved: 'Approved',
+  approved: 'Approved - Ready to Measure',
   measuring: 'Measuring',
   complete: 'Complete',
 };
