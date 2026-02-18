@@ -76,56 +76,49 @@ export function useAuth(): BaseAuthState {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = useCallback(async (userId: string) => {
-    const p = await fetchProfile(userId);
-    setProfile(p);
-    return p;
-  }, []);
-
+  // Load profile whenever session changes
   useEffect(() => {
-    let resolved = false;
-    const done = () => {
-      if (!resolved) {
-        resolved = true;
-        setLoading(false);
-      }
-    };
+    if (session?.user) {
+      fetchProfile(session.user.id).then((p) => setProfile(p)).catch(() => {});
+    } else {
+      setProfile(null);
+    }
+  }, [session]);
 
-    // Safety timeout — never hang on the loading screen
-    const timeout = setTimeout(done, 3000);
+  // Determine session on mount
+  useEffect(() => {
+    let cancelled = false;
 
-    // Get initial session
+    // Safety timeout — never hang on loading
+    const timeout = setTimeout(() => { if (!cancelled) setLoading(false); }, 3000);
+
     supabase.auth.getSession()
-      .then(async ({ data: { session: s } }) => {
-        setSession(s);
-        if (s?.user) {
-          try { await loadProfile(s.user.id); } catch { /* ignore */ }
+      .then(({ data: { session: s } }) => {
+        if (!cancelled) {
+          setSession(s);
+          setLoading(false);
         }
-        done();
       })
       .catch(() => {
-        // AbortError from React 19 strict mode double-mount is expected
-        done();
+        // AbortError from React 19 strict mode is expected
+        if (!cancelled) setLoading(false);
       });
 
-    // Listen for auth changes (also resolves loading if getSession was aborted)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, s) => {
-        setSession(s);
-        if (s?.user) {
-          try { await loadProfile(s.user.id); } catch { /* ignore */ }
-        } else {
-          setProfile(null);
+      (_event, s) => {
+        if (!cancelled) {
+          setSession(s);
+          setLoading(false);
         }
-        done();
       }
     );
 
     return () => {
+      cancelled = true;
       clearTimeout(timeout);
       subscription.unsubscribe();
     };
-  }, [loadProfile]);
+  }, []);
 
   return {
     session,
