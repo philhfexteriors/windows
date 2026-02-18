@@ -26,6 +26,7 @@ export default function JobDetailPage() {
   const [windows, setWindows] = useState<WindowRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const autoCompleting = useRef(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -119,7 +120,6 @@ export default function JobDetailPage() {
   const pendingCount = windows.filter((w) => w.status === 'pending').length;
   const measuredCount = windows.filter((w) => w.status === 'measured').length;
   const allMeasured = windows.length > 0 && pendingCount === 0;
-  const autoCompleting = useRef(false);
 
   // Auto-complete when all measured
   useEffect(() => {
