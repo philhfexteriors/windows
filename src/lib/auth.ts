@@ -32,16 +32,23 @@ export interface AuthState extends BaseAuthState {
 }
 
 export async function signInWithGoogle() {
-  const { error } = await supabase.auth.signInWithOAuth({
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
+      skipBrowserRedirect: true, // Get the URL instead of auto-redirecting (fixes mobile/PWA)
       queryParams: {
         hd: 'hfexteriors.com', // Restrict to HF Exteriors Google Workspace domain
       },
     },
   });
   if (error) throw error;
+  if (data?.url) {
+    // Manually redirect — bypasses service worker and mobile browser quirks
+    window.location.href = data.url;
+  } else {
+    throw new Error('No OAuth URL returned from Supabase');
+  }
 }
 
 export async function signOut() {
@@ -77,13 +84,34 @@ export function useAuth(): BaseAuthState {
   }, []);
 
   useEffect(() => {
+    let didTimeout = false;
+
+    // Safety timeout — never hang on the loading screen for more than 8 seconds
+    const timeout = setTimeout(() => {
+      didTimeout = true;
+      setLoading(false);
+    }, 8000);
+
     // Get initial session — await profile before clearing loading state
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s);
       if (s?.user) {
-        await loadProfile(s.user.id);
+        try {
+          await loadProfile(s.user.id);
+        } catch (err) {
+          console.error('Failed to load profile:', err);
+        }
       }
-      setLoading(false);
+      if (!didTimeout) {
+        clearTimeout(timeout);
+        setLoading(false);
+      }
+    }).catch((err) => {
+      console.error('getSession failed:', err);
+      if (!didTimeout) {
+        clearTimeout(timeout);
+        setLoading(false);
+      }
     });
 
     // Listen for auth changes
@@ -91,7 +119,11 @@ export function useAuth(): BaseAuthState {
       async (_event, s) => {
         setSession(s);
         if (s?.user) {
-          await loadProfile(s.user.id);
+          try {
+            await loadProfile(s.user.id);
+          } catch (err) {
+            console.error('Failed to load profile on auth change:', err);
+          }
         } else {
           setProfile(null);
         }
@@ -99,7 +131,10 @@ export function useAuth(): BaseAuthState {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, [loadProfile]);
 
   return {
