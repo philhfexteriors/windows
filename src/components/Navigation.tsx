@@ -85,16 +85,29 @@ export default function Navigation() {
           </Link>
         ))}
 
-        {/* Admin link */}
+        {/* Admin links */}
         {can('admin:manage_users') && (
-          <Link
-            href="/admin/users"
-            className={navLinkClasses('/admin')}
-            onClick={() => setMobileOpen(false)}
-          >
-            <span className="text-base">⚙️</span>
-            <span>Admin</span>
-          </Link>
+          <>
+            <div className="pt-3 mt-3 border-t border-gray-200">
+              <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Admin</p>
+            </div>
+            <Link
+              href="/admin/users"
+              className={navLinkClasses('/admin/users')}
+              onClick={() => setMobileOpen(false)}
+            >
+              <span className="text-base">👥</span>
+              <span>Users & Roles</span>
+            </Link>
+            <Link
+              href="/admin/specs"
+              className={navLinkClasses('/admin/specs')}
+              onClick={() => setMobileOpen(false)}
+            >
+              <span className="text-base">⚙️</span>
+              <span>Window Specs</span>
+            </Link>
+          </>
         )}
       </nav>
 

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthContext } from '@/components/AuthProvider';
-import { createJob, addJobActivity } from '@/lib/supabase';
+import { createJob, addJobActivity, getNextPONumber } from '@/lib/supabase';
 import CCProjectSearch, { CCProject } from './CCProjectSearch';
 
 export default function JobCreateForm() {
@@ -41,9 +41,10 @@ export default function JobCreateForm() {
     setSaving(true);
     setError(null);
     try {
+      const finalPO = await getNextPONumber(poNumber.trim());
       const job = await createJob({
         created_by: user.id,
-        po_number: poNumber.trim(),
+        po_number: finalPO,
         client_name: clientName || null,
         client_address: clientAddress || null,
         client_city: clientCity || null,

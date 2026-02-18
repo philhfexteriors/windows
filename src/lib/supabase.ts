@@ -65,6 +65,9 @@ export interface WindowRow {
   outside_color: string | null;
   inside_color: string | null;
   screen: string | null;
+  hover_label: string | null;
+  hover_group: string | null;
+  custom_specs: Record<string, string>;
   notes: string;
   status: 'pending' | 'measured';
   created_at: string;
@@ -229,6 +232,69 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
   };
 }
 
+// ===== JOB STATS WITH DATE FILTERING =====
+
+export type DateRange = 'this_week' | 'last_week' | 'this_month' | 'this_year' | 'all';
+
+export interface JobStats {
+  totalJobs: number;
+  jobsPending: number;
+  jobsComplete: number;
+}
+
+function getDateRangeFilter(range: DateRange): string | null {
+  const now = new Date();
+  switch (range) {
+    case 'this_week': {
+      const start = new Date(now);
+      start.setDate(now.getDate() - now.getDay());
+      start.setHours(0, 0, 0, 0);
+      return start.toISOString();
+    }
+    case 'last_week': {
+      const start = new Date(now);
+      start.setDate(now.getDate() - now.getDay() - 7);
+      start.setHours(0, 0, 0, 0);
+      return start.toISOString();
+    }
+    case 'this_month': {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return start.toISOString();
+    }
+    case 'this_year': {
+      const start = new Date(now.getFullYear(), 0, 1);
+      return start.toISOString();
+    }
+    case 'all':
+    default:
+      return null;
+  }
+}
+
+export async function fetchJobStats(range: DateRange = 'all'): Promise<JobStats> {
+  let query = supabase.from('jobs').select('status, created_at');
+
+  const dateFilter = getDateRangeFilter(range);
+  if (dateFilter) {
+    query = query.gte('created_at', dateFilter);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  let totalJobs = 0;
+  let jobsPending = 0;
+  let jobsComplete = 0;
+
+  for (const job of data || []) {
+    totalJobs++;
+    if (job.status === 'complete') jobsComplete++;
+    else jobsPending++;
+  }
+
+  return { totalJobs, jobsPending, jobsComplete };
+}
+
 export async function fetchRecentMeasurements(limit = 10): Promise<WindowRow[]> {
   const { data, error } = await supabase
     .from('windows')
@@ -266,6 +332,9 @@ export async function bulkInsertWindows(
     outside_color: row.outside_color || null,
     inside_color: row.inside_color || null,
     screen: row.screen || null,
+    hover_label: row.hover_label || null,
+    hover_group: row.hover_group || null,
+    custom_specs: row.custom_specs || {},
     notes: row.notes || '',
     status: row.status || 'pending',
   }));
@@ -329,6 +398,36 @@ export async function fetchJob(id: string): Promise<Job> {
 
   if (error) throw error;
   return data as Job;
+}
+
+export async function getNextPONumber(basePO: string): Promise<string> {
+  // Find all existing jobs with this base PO (exact match or with " - N" suffix)
+  const { data, error } = await supabase
+    .from('jobs')
+    .select('po_number')
+    .or(`po_number.eq.${basePO},po_number.like.${basePO} - %`);
+
+  if (error) throw error;
+
+  if (!data || data.length === 0) {
+    return `${basePO} - 1`;
+  }
+
+  // Find the highest existing suffix number
+  let maxSuffix = 0;
+  for (const job of data) {
+    if (job.po_number === basePO) {
+      // Legacy job without suffix — treat as 0
+      maxSuffix = Math.max(maxSuffix, 0);
+    } else {
+      const match = job.po_number.match(/ - (\d+)$/);
+      if (match) {
+        maxSuffix = Math.max(maxSuffix, parseInt(match[1], 10));
+      }
+    }
+  }
+
+  return `${basePO} - ${maxSuffix + 1}`;
 }
 
 export async function createJob(
@@ -428,6 +527,69 @@ export function subscribeToJob(
       () => onUpdate()
     )
     .subscribe();
+}
+
+// ===== WINDOW SPEC FIELDS (Dynamic Specs) =====
+
+export interface WindowSpecField {
+  id: string;
+  name: string;
+  label: string;
+  field_type: 'dropdown' | 'text';
+  options: string[];
+  sort_order: number;
+  active: boolean;
+  include_other: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchWindowSpecFields(): Promise<WindowSpecField[]> {
+  const { data, error } = await supabase
+    .from('window_spec_fields')
+    .select('*')
+    .eq('active', true)
+    .order('sort_order', { ascending: true });
+
+  if (error) throw error;
+  return (data || []) as WindowSpecField[];
+}
+
+export async function fetchAllWindowSpecFields(): Promise<WindowSpecField[]> {
+  const { data, error } = await supabase
+    .from('window_spec_fields')
+    .select('*')
+    .order('sort_order', { ascending: true });
+
+  if (error) throw error;
+  return (data || []) as WindowSpecField[];
+}
+
+export async function upsertWindowSpecField(
+  field: Partial<WindowSpecField>
+): Promise<WindowSpecField> {
+  const payload = {
+    ...field,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from('window_spec_fields')
+    .upsert(payload, { onConflict: 'id' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as WindowSpecField;
+}
+
+export async function deleteWindowSpecField(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('window_spec_fields')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
 }
 
 // ===== ADMIN / RBAC FUNCTIONS =====

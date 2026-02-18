@@ -314,6 +314,42 @@ function MeasurementsContent() {
               </button>
             )}
           </div>
+
+          {/* Quick window selector */}
+          {windows.length > 0 && canMeasure && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Quick Select Window</label>
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) handleMeasure(e.target.value);
+                }}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              >
+                <option value="">Select a window to measure...</option>
+                {/* Pending windows first */}
+                {windows.filter((w) => w.status === 'pending').length > 0 && (
+                  <optgroup label="Pending">
+                    {windows.filter((w) => w.status === 'pending').map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.label || 'Window'} — {w.approx_width}&quot; x {w.approx_height}&quot; [{w.type}]
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {/* Measured windows after */}
+                {windows.filter((w) => w.status === 'measured').length > 0 && (
+                  <optgroup label="Measured">
+                    {windows.filter((w) => w.status === 'measured').map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.label || 'Window'} — {w.approx_width}&quot; x {w.approx_height}&quot; [{w.type}] ✓
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+          )}
         </div>
       )}
 

@@ -7,7 +7,7 @@ import AppShell from '@/components/AppShell';
 import HoverJobSearch from '@/components/HoverJobSearch';
 import HoverModelPicker from '@/components/HoverModelPicker';
 import HoverWindowImport from '@/components/HoverWindowImport';
-import WindowSelector from '@/components/WindowSelector';
+import WindowSelector, { type WindowSpec } from '@/components/WindowSelector';
 import SpreadsheetUpload from '@/components/SpreadsheetUpload';
 import { useAuthContext } from '@/components/AuthProvider';
 import {
@@ -79,27 +79,20 @@ export default function ImportPage() {
     setStep('configure');
   };
 
-  interface WindowSpec {
-    type: string;
-    grid_style: string;
-    temper: string;
-    screen: string;
-    outside_color: string;
-    inside_color: string;
-  }
-
   const handleSaveSpecs = async (specs: Map<string, WindowSpec>) => {
     if (!job || !user) return;
     setSaving(true);
 
     try {
       // Create window records from imported Hover data + user-configured specs
-      const defaultSpec: WindowSpec = { type: 'Single Hung', grid_style: 'None', temper: 'None', screen: 'None', outside_color: '', inside_color: '' };
+      const defaultSpec: WindowSpec = { type: 'Single Hung', grid_style: 'None', temper: 'None', screen: 'None', outside_color: '', inside_color: '', custom_label: '', custom_group: '' };
       const rows = importedWindows.map((w) => {
         const spec = specs.get(w.label) || defaultSpec;
         return {
-          label: w.label,
-          location: w.groupName,
+          label: spec.custom_label || w.label,        // User-editable name
+          location: spec.custom_group || w.groupName,  // User-editable group
+          hover_label: w.label,                         // Preserve Hover reference (e.g., W-101)
+          hover_group: w.groupName,                     // Preserve Hover group (e.g., WG-1)
           type: spec.type || 'Single Hung',
           approx_width: w.roundedWidth,
           approx_height: w.roundedHeight,
@@ -112,7 +105,7 @@ export default function ImportPage() {
           screen: spec.screen || 'None',
           outside_color: spec.outside_color || null,
           inside_color: spec.inside_color || null,
-          notes: `Hover: ${w.groupName} — ${w.roundedWidth}" x ${w.roundedHeight}" (${w.area} sqft)`,
+          notes: `Hover: ${w.groupName} / ${w.label} — ${w.roundedWidth}" x ${w.roundedHeight}" (${w.area} sqft)`,
           status: 'pending' as const,
         };
       });

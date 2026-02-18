@@ -247,12 +247,24 @@ export default function JobDetailPage() {
                       {w.label || '?'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900">
-                        {w.approx_width && w.approx_height
-                          ? `${w.approx_width} x ${w.approx_height}`
-                          : 'No dimensions'}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">
+                          {w.approx_width && w.approx_height
+                            ? `${w.approx_width}" x ${w.approx_height}"`
+                            : 'No dimensions'}
+                        </span>
+                        {w.type && <span className="text-xs text-gray-500">{w.type}</span>}
                       </div>
-                      {w.type && <div className="text-xs text-gray-500">{w.type}</div>}
+                      {/* Hover reference (if different from user name) */}
+                      {(w.hover_label || w.hover_group) && (
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          Hover: {[w.hover_group, w.hover_label].filter(Boolean).join(' / ')}
+                        </div>
+                      )}
+                      {/* Location / Group */}
+                      {w.location && (
+                        <div className="text-xs text-gray-500 mt-0.5">{w.location}</div>
+                      )}
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
                       w.status === 'measured' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'

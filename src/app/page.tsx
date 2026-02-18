@@ -1,16 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   fetchJobs,
-  fetchDashboardStats,
-  fetchRecentMeasurements,
+  fetchJobStats,
   type JobWithCounts,
-  type WindowRow,
-  type DashboardStats,
+  type JobStats,
+  type DateRange,
 } from '@/lib/supabase';
-import { formatFraction } from '@/lib/measurements';
 import AppShell from '@/components/AppShell';
 import { useAuthContext } from '@/components/AuthProvider';
 
@@ -32,48 +30,52 @@ const statusLabels: Record<string, string> = {
   complete: 'Complete',
 };
 
+const dateRangeOptions: { value: DateRange; label: string }[] = [
+  { value: 'this_week', label: 'This Week' },
+  { value: 'last_week', label: 'Last Week' },
+  { value: 'this_month', label: 'This Month' },
+  { value: 'this_year', label: 'This Year' },
+  { value: 'all', label: 'All Time' },
+];
+
 export default function Dashboard() {
   const { can } = useAuthContext();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [jobStats, setJobStats] = useState<JobStats | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange>('all');
   const [jobs, setJobs] = useState<JobWithCounts[]>([]);
-  const [recentMeasurements, setRecentMeasurements] = useState<WindowRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadDashboard();
+  const loadStats = useCallback(async (range: DateRange) => {
+    try {
+      const stats = await fetchJobStats(range);
+      setJobStats(stats);
+    } catch (err) {
+      console.error('Failed to load stats:', err);
+    }
   }, []);
 
-  const loadDashboard = async () => {
-    setLoading(true);
-    try {
-      const [statsData, jobsData, recentData] = await Promise.all([
-        fetchDashboardStats(),
-        fetchJobs(),
-        fetchRecentMeasurements(5),
-      ]);
-      setStats(statsData);
-      setJobs(jobsData);
-      setRecentMeasurements(recentData);
-    } catch (err) {
-      console.error('Failed to load dashboard:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    const loadDashboard = async () => {
+      setLoading(true);
+      try {
+        const [statsData, jobsData] = await Promise.all([
+          fetchJobStats(dateRange),
+          fetchJobs(),
+        ]);
+        setJobStats(statsData);
+        setJobs(jobsData);
+      } catch (err) {
+        console.error('Failed to load dashboard:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadDashboard();
+  }, [dateRange]);
 
-  const formatTimeAgo = (dateStr: string) => {
-    const now = new Date();
-    const date = new Date(dateStr);
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
+  const handleDateRangeChange = (range: DateRange) => {
+    setDateRange(range);
+    loadStats(range);
   };
 
   if (loading) {
@@ -88,6 +90,10 @@ export default function Dashboard() {
 
   const activeJobs = jobs.filter((j) => j.status !== 'complete').slice(0, 5);
   const recentComplete = jobs.filter((j) => j.status === 'complete').slice(0, 3);
+  const recentlyMeasured = jobs
+    .filter((j) => j.measured_windows > 0)
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    .slice(0, 5);
 
   return (
     <AppShell>
@@ -106,19 +112,36 @@ export default function Dashboard() {
         )}
       </div>
 
+      {/* Date Range Filter */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {dateRangeOptions.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => handleDateRangeChange(opt.value)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              dateRange === opt.value
+                ? 'bg-primary text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="bg-white p-5 rounded-xl border border-gray-200">
-          <p className="text-sm font-medium text-gray-500 mb-1">Active Jobs</p>
-          <p className="text-3xl font-bold text-gray-900">{activeJobs.length}</p>
+          <p className="text-sm font-medium text-gray-500 mb-1">Total Jobs</p>
+          <p className="text-3xl font-bold text-gray-900">{jobStats?.totalJobs ?? 0}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-gray-200">
-          <p className="text-sm font-medium text-gray-500 mb-1">Pending Windows</p>
-          <p className="text-3xl font-bold text-amber-600">{stats?.pendingWindows ?? 0}</p>
+          <p className="text-sm font-medium text-gray-500 mb-1">Jobs Pending</p>
+          <p className="text-3xl font-bold text-amber-600">{jobStats?.jobsPending ?? 0}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-gray-200">
-          <p className="text-sm font-medium text-gray-500 mb-1">Measured Windows</p>
-          <p className="text-3xl font-bold text-green-600">{stats?.measuredWindows ?? 0}</p>
+          <p className="text-sm font-medium text-gray-500 mb-1">Jobs Complete</p>
+          <p className="text-3xl font-bold text-green-600">{jobStats?.jobsComplete ?? 0}</p>
         </div>
       </div>
 
@@ -198,44 +221,33 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Recent Measurements */}
-      {recentMeasurements.length > 0 && (
+      {/* Recently Measured Jobs */}
+      {recentlyMeasured.length > 0 && (
         <div className="bg-white p-6 rounded-xl border border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Measurements</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">PO</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Window</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Size</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Type</th>
-                  <th className="px-3 py-2 text-right font-medium text-gray-600">Updated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentMeasurements.map((w) => (
-                  <tr key={w.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="px-3 py-3">
-                      <Link
-                        href={`/measurements?po=${encodeURIComponent(w.po_number)}&edit=${w.id}`}
-                        className="text-primary hover:underline font-medium"
-                      >
-                        {w.po_number}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3 text-gray-700">{w.label || w.location || '—'}</td>
-                    <td className="px-3 py-3 font-medium text-gray-900">
-                      {w.final_w != null && w.final_h != null
-                        ? `${formatFraction(w.final_w)}" x ${formatFraction(w.final_h)}"`
-                        : '—'}
-                    </td>
-                    <td className="px-3 py-3 text-gray-600">{w.type || '—'}</td>
-                    <td className="px-3 py-3 text-right text-gray-500">{formatTimeAgo(w.updated_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recently Measured</h2>
+          <div className="space-y-2">
+            {recentlyMeasured.map((job) => (
+              <Link
+                key={job.id}
+                href={`/jobs/${job.id}`}
+                className="block p-4 rounded-lg border border-gray-100 hover:border-gray-300 hover:bg-gray-50 transition-all"
+              >
+                <div className="flex justify-between items-center">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-semibold text-gray-900">{job.po_number}</span>
+                    {job.client_name && (
+                      <span className="text-sm text-gray-500 ml-2">{job.client_name}</span>
+                    )}
+                  </div>
+                  <div className="text-right ml-4">
+                    <div className="text-sm font-medium text-primary">
+                      {job.measured_windows}/{job.total_windows}
+                    </div>
+                    <div className="text-xs text-gray-500">measured</div>
+                  </div>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       )}
